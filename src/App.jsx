@@ -13,7 +13,7 @@ import {
 import { db } from './firebase'; 
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
 
-const GlobalAnnouncement = "🌊 系統升級：現在開放線上委託申請囉！歡迎點擊首頁按鈕發起委託。";
+const GlobalAnnouncement = "🌊 系統升級：介面排版優化，操作更舒適！";
 
 const PAYMENT_STATUS = {
   none: { label: '未付款', color: 'text-slate-400', bg: 'bg-slate-100', icon: Wallet },
@@ -69,11 +69,10 @@ const App = () => {
   // 處理發起新委託
   const handleNewRequest = async (requestData) => {
     try {
-      // 預設資料結構
       const newCommission = {
         ...requestData,
-        code: 'PENDING', // 暫時沒有編號
-        status: 'pending', // 狀態：待確認
+        code: 'PENDING',
+        status: 'pending',
         note: '您的委託已送出，繪師審核中。請留意您的聯絡信箱/方式。',
         items: {
           avatar: { active: requestData.type === 'avatar', progress: 0, price: 0, payment: 'none', preview: '' },
@@ -125,7 +124,7 @@ const App = () => {
   );
 };
 
-// --- 1. 登入介面 (新增委託按鈕) ---
+// --- 1. 登入介面 ---
 const LoginView = ({ onLogin, onRequest }) => {
   const [activeTab, setActiveTab] = useState('client');
   const [formData, setFormData] = useState({ name: '', code: '', password: '' });
@@ -146,36 +145,45 @@ const LoginView = ({ onLogin, onRequest }) => {
             <p className="text-slate-500 mt-2 font-medium">Cloud Database Connected</p>
           </div>
 
-          <div className="flex p-2 mx-8 bg-slate-100/80 rounded-2xl mb-6">
-            <button onClick={() => setActiveTab('client')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'client' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>查詢進度</button>
-            <button onClick={() => setActiveTab('artist')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'artist' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>繪師後台</button>
+          <div className="flex p-2 mx-8 bg-slate-100/80 rounded-2xl mb-8">
+            <button onClick={() => setActiveTab('client')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'client' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>查詢進度</button>
+            <button onClick={() => setActiveTab('artist')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'artist' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>繪師後台</button>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); onLogin(activeTab, formData); }} className="px-8 pb-8 space-y-5">
+          {/* 調整間距：space-y-6 (原本是 5) */}
+          <form onSubmit={(e) => { e.preventDefault(); onLogin(activeTab, formData); }} className="px-8 pb-10 space-y-6">
             {activeTab === 'client' ? (
               <>
-                <input required type="text" placeholder="您的名稱" className="input-field" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                <input required type="text" placeholder="查詢編號 (ex: STAR01)" className="input-field" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
+                <div>
+                  <label className="label">委託人名稱</label>
+                  <input required type="text" placeholder="您的名稱" className="input-field" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div>
+                  <label className="label">查詢編號</label>
+                  <input required type="text" placeholder="ex: STAR01" className="input-field" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
+                </div>
               </>
             ) : (
-              <input required type="password" placeholder="管理密碼 (admin)" className="input-field" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <div>
+                <label className="label">管理密碼</label>
+                <input required type="password" placeholder="admin" className="input-field" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              </div>
             )}
             <button type="submit" className="w-full py-4 rounded-2xl font-bold text-white shadow-lg bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 active:scale-[0.98] transition-all">
               {activeTab === 'client' ? '查詢進度' : '進入後台'}
             </button>
           </form>
 
-          {/* 新增：發起委託按鈕 */}
           {activeTab === 'client' && (
             <div className="px-8 pb-10">
-              <div className="relative flex py-2 items-center">
+              <div className="relative flex py-4 items-center">
                 <div className="flex-grow border-t border-slate-200"></div>
                 <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium">還沒有委託嗎？</span>
                 <div className="flex-grow border-t border-slate-200"></div>
               </div>
               <button 
                 onClick={() => setIsRequestModalOpen(true)}
-                className="w-full py-3 rounded-2xl font-bold text-pink-500 border-2 border-pink-100 bg-pink-50 hover:bg-pink-100 hover:border-pink-200 transition-all flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-2xl font-bold text-pink-500 border-2 border-pink-100 bg-pink-50 hover:bg-pink-100 hover:border-pink-200 transition-all flex items-center justify-center gap-2"
               >
                 <Sparkles size={18} /> 我要委託
               </button>
@@ -184,7 +192,6 @@ const LoginView = ({ onLogin, onRequest }) => {
         </div>
       </div>
 
-      {/* 委託申請 Modal */}
       {isRequestModalOpen && (
         <RequestModal onClose={() => setIsRequestModalOpen(false)} onSubmit={onRequest} />
       )}
@@ -192,7 +199,7 @@ const LoginView = ({ onLogin, onRequest }) => {
   );
 };
 
-// --- 新增：委託申請表單 ---
+// --- 新增：委託申請表單 (間距加大版) ---
 const RequestModal = ({ onClose, onSubmit }) => {
   const [form, setForm] = useState({ name: '', contact: '', type: 'avatar', desc: '' });
 
@@ -203,15 +210,16 @@ const RequestModal = ({ onClose, onSubmit }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in overflow-y-auto">
+      <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl p-8 my-8">
+        <div className="flex justify-between items-center mb-8">
+          <h3 className="font-bold text-2xl text-slate-800 flex items-center gap-2">
             <Mail className="text-pink-500" /> 委託申請
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size={20} /></button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size={24} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 調整間距：space-y-6 */}
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="label">您的暱稱</label>
             <input required type="text" className="input-field" placeholder="ex: 星野" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
@@ -230,10 +238,10 @@ const RequestModal = ({ onClose, onSubmit }) => {
           </div>
           <div>
             <label className="label">需求簡述</label>
-            <textarea className="input-field resize-none h-24" placeholder="請描述您的角色特徵、構圖想法..." value={form.desc} onChange={e => setForm({...form, desc: e.target.value})}></textarea>
+            <textarea className="input-field resize-none h-32" placeholder="請描述您的角色特徵、構圖想法..." value={form.desc} onChange={e => setForm({...form, desc: e.target.value})}></textarea>
           </div>
-          <button type="submit" className="w-full py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-all shadow-lg shadow-pink-200 mt-2 flex items-center justify-center gap-2">
-            <Send size={18} /> 送出申請
+          <button type="submit" className="w-full py-4 bg-pink-500 text-white font-bold rounded-2xl hover:bg-pink-600 transition-all shadow-lg shadow-pink-200 mt-4 flex items-center justify-center gap-2">
+            <Send size={20} /> 送出申請
           </button>
         </form>
       </div>
@@ -241,7 +249,7 @@ const RequestModal = ({ onClose, onSubmit }) => {
   );
 };
 
-// --- 2. 委託人儀表板 (維持不變) ---
+// --- 2. 委託人儀表板 ---
 const ClientDashboard = ({ user, data, onLogout }) => {
   if (!data) return <div className="p-10 text-center">資料讀取錯誤或已被刪除 <button onClick={onLogout} className="underline">登出</button></div>;
 
@@ -310,14 +318,14 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                      const StatusIcon = statusInfo.icon;
                      return (
                        <div className="space-y-8">
-                         <div className="flex flex-col sm:flex-row gap-4">
-                           <div className={`flex-1 p-4 rounded-2xl border ${currentItem.payment === 'full' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                         <div className="flex flex-col sm:flex-row gap-6">
+                           <div className={`flex-1 p-5 rounded-2xl border ${currentItem.payment === 'full' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
                               <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
-                              <div className="flex items-center gap-1 mt-1"><DollarSign size={16}/><span className="text-2xl font-bold">{currentItem.price.toLocaleString()}</span></div>
+                              <div className="flex items-center gap-1 mt-2"><DollarSign size={18}/><span className="text-3xl font-bold">{currentItem.price.toLocaleString()}</span></div>
                            </div>
-                           <div className={`flex-1 p-4 rounded-2xl border ${statusInfo.bg} border-transparent`}>
+                           <div className={`flex-1 p-5 rounded-2xl border ${statusInfo.bg} border-transparent`}>
                               <span className={`text-xs font-bold uppercase opacity-60 ${statusInfo.color}`}>Payment</span>
-                              <div className={`flex items-center gap-2 mt-1 font-bold ${statusInfo.color}`}><StatusIcon size={20}/>{statusInfo.label}</div>
+                              <div className={`flex items-center gap-2 mt-2 font-bold text-lg ${statusInfo.color}`}><StatusIcon size={22}/>{statusInfo.label}</div>
                            </div>
                          </div>
                          <div>
@@ -341,7 +349,7 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                             </div>
                          </div>
                          <div>
-                           <div className="flex justify-between items-end mb-2">
+                           <div className="flex justify-between items-end mb-3">
                              <span className="font-bold text-slate-700">Completion</span>
                              <span className="text-xl font-bold text-blue-600">{currentItem.progress}%</span>
                            </div>
@@ -393,7 +401,7 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                  <div><p className="text-xs text-slate-400 uppercase">Client</p><p className="font-bold text-slate-800">{data.name}</p></div>
                  <div className="text-right"><p className="text-xs text-slate-400 uppercase">Date</p><p className="font-bold text-slate-800">{data.updatedAt}</p></div>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                  {Object.entries(data.items).filter(([_, i]) => i.active).map(([key, i]) => (
                    <div key={key} className="flex justify-between text-sm">
                      <span className="text-slate-600 capitalize">{tabLabels[key]}</span>
@@ -413,12 +421,11 @@ const ClientDashboard = ({ user, data, onLogout }) => {
   );
 };
 
-// --- 3. 繪師後台 (更新版) ---
+// --- 3. 繪師後台 ---
 const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
-  // 區分待審核與進行中
   const pendingRequests = commissions.filter(c => c.status === 'pending');
   const activeCommissions = commissions.filter(c => c.status !== 'pending');
 
@@ -437,7 +444,6 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   };
 
   const handleSave = async (data) => {
-    // 防呆：如果是 pending 轉正，必須填寫編號
     if (data.status !== 'pending' && (!data.code || data.code === 'PENDING')) {
         notify('請為新委託設定一個正式編號', 'error');
         return;
@@ -494,7 +500,6 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
           <button onClick={() => openModal()} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all"><Plus size={18} /> 新增</button>
         </div>
 
-        {/* 待審核區塊 */}
         {pendingRequests.length > 0 && (
           <div className="mb-10">
             <h3 className="text-lg font-bold text-slate-500 mb-4 flex items-center gap-2">
@@ -519,7 +524,6 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
           </div>
         )}
 
-        {/* 進行中委託 */}
         <h3 className="text-lg font-bold text-slate-500 mb-4">進行中委託</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {activeCommissions.map(item => (
@@ -549,7 +553,7 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   );
 };
 
-// --- 組件: 編輯視窗 (微調) ---
+// --- 組件: 編輯視窗 (間距加大版) ---
 const EditModal = ({ data, onClose, onSave }) => {
   const [form, setForm] = useState(data);
   const [tab, setTab] = useState('info'); 
@@ -561,37 +565,42 @@ const EditModal = ({ data, onClose, onSave }) => {
   const tabs = [{ id: 'info', label: '基本' }, { id: 'avatar', label: '大頭' }, { id: 'halfBody', label: '半身' }, { id: 'fullBody', label: '全身' }];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0"><h3 className="font-bold text-lg text-slate-800">編輯委託</h3><button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X size={20} /></button></div>
-        <div className="flex p-2 bg-white border-b border-slate-100 shrink-0">{tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${tab === t.id ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>{t.label}</button>))}</div>
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in overflow-y-auto">
+      <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col my-8">
+        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0"><h3 className="font-bold text-xl text-slate-800">編輯委託</h3><button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X size={24} /></button></div>
+        <div className="flex p-3 bg-white border-b border-slate-100 shrink-0">{tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-colors ${tab === t.id ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>{t.label}</button>))}</div>
+        
+        {/* 調整內容區間距 */}
+        <div className="p-8 overflow-y-auto custom-scrollbar max-h-[70vh]">
           {tab === 'info' && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4"><div><label className="label">名稱</label><input type="text" className="input-field" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div><div><label className="label">編號 (審核時請修改)</label><input type="text" className="input-field font-mono text-blue-600" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div></div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div><label className="label">名稱</label><input type="text" className="input-field" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+                <div><label className="label">編號 (審核時請修改)</label><input type="text" className="input-field font-mono text-blue-600" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
+              </div>
               <div><label className="label">聯絡方式</label><input type="text" className="input-field" value={form.contact || ''} onChange={e => setForm({...form, contact: e.target.value})} placeholder="Email / Discord" /></div>
-              <div><label className="label">狀態</label><div className="flex bg-slate-100 p-1 rounded-xl">
+              <div><label className="label">狀態</label><div className="flex bg-slate-100 p-1.5 rounded-xl">
                   {['pending', 'waiting', 'working', 'done'].map(s => (
-                    <button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>
+                    <button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>
                   ))}
                 </div></div>
-              <div><label className="label">需求描述 / 備註</label><textarea className="input-field resize-none h-24" value={form.desc || form.note} onChange={e => setForm({...form, note: e.target.value, desc: e.target.value})}></textarea></div>
+              <div><label className="label">需求描述 / 備註</label><textarea className="input-field resize-none h-32" value={form.desc || form.note} onChange={e => setForm({...form, note: e.target.value, desc: e.target.value})}></textarea></div>
             </div>
           )}
           {['avatar', 'halfBody', 'fullBody'].includes(tab) && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100"><span className="font-bold text-slate-700">啟用此項目</span><button onClick={() => toggleActive(tab)} className={`w-12 h-7 rounded-full transition-colors relative ${form.items[tab].active ? 'bg-blue-500' : 'bg-slate-300'}`}><span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${form.items[tab].active ? 'translate-x-5' : ''}`}></span></button></div>
+            <div className="space-y-8">
+              <div className="flex items-center justify-between bg-slate-50 p-5 rounded-xl border border-slate-100"><span className="font-bold text-slate-700">啟用此項目</span><button onClick={() => toggleActive(tab)} className={`w-12 h-7 rounded-full transition-colors relative ${form.items[tab].active ? 'bg-blue-500' : 'bg-slate-300'}`}><span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${form.items[tab].active ? 'translate-x-5' : ''}`}></span></button></div>
               {form.items[tab].active && (
-                <div className="space-y-5 animate-in slide-in-from-top-2">
-                   <div><label className="label">進度 ({form.items[tab].progress}%)</label><input type="range" min="0" max="100" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" value={form.items[tab].progress} onChange={e => updateItem(tab, 'progress', parseInt(e.target.value))} /></div>
-                   <div className="grid grid-cols-2 gap-4"><div><label className="label">金額</label><input type="number" className="input-field" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div><div><label className="label">付款</label><select className="input-field" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div></div>
-                   <div><label className="label">預覽圖連結 (URL)</label><input type="text" className="input-field text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} /><p className="text-[10px] text-slate-400 mt-1">請貼上圖片網址</p></div>
+                <div className="space-y-6 animate-in slide-in-from-top-2">
+                   <div><label className="label">進度 ({form.items[tab].progress}%)</label><input type="range" min="0" max="100" className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" value={form.items[tab].progress} onChange={e => updateItem(tab, 'progress', parseInt(e.target.value))} /></div>
+                   <div className="grid grid-cols-2 gap-6"><div><label className="label">金額</label><input type="number" className="input-field" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div><div><label className="label">付款</label><select className="input-field" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div></div>
+                   <div><label className="label">預覽圖連結 (URL)</label><input type="text" className="input-field text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} /><p className="text-[10px] text-slate-400 mt-2">請貼上圖片網址</p></div>
                 </div>
               )}
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-slate-100 flex gap-3 shrink-0 bg-white"><button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button><button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存變更</button></div>
+        <div className="p-6 border-t border-slate-100 flex gap-4 shrink-0 bg-white"><button onClick={onClose} className="flex-1 py-3.5 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button><button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存變更</button></div>
       </div>
     </div>
   );
@@ -609,5 +618,6 @@ const StatusBadge = ({ status, mini }) => {
   return <span className={`${bg} ${text} rounded-full font-bold px-4 py-2 text-sm flex items-center gap-2 border border-white shadow-sm`}><Icon size={16} /> {label}</span>;
 };
 
-const styles = `.label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2; } .input-field { @apply w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`;
+// --- CSS樣式調整：加大標籤間距 mb-3 (原本2) ---
+const styles = `.label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3; } .input-field { @apply w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`;
 export default App;
