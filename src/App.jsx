@@ -55,7 +55,7 @@ const InputBox = ({ label, children, style = {} }) => (
   </div>
 );
 
-// --- 新增：即時聊天框組件 ---
+// --- 修復版：即時聊天框組件 ---
 const ChatBox = ({ commissionId, currentUser }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -63,22 +63,25 @@ const ChatBox = ({ commissionId, currentUser }) => {
 
   useEffect(() => {
     if (!commissionId) return;
-    // 監聽該委託ID的訊息
+    // 修復：移除 orderBy，避免 Firebase 需要建立索引導致無法顯示
     const q = query(
       collection(db, "messages"), 
-      where("commissionId", "==", commissionId), 
-      orderBy("createdAt", "asc")
+      where("commissionId", "==", commissionId)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      // 自動捲動到底部
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // 在客戶端進行時間排序
+      msgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return () => unsubscribe();
   }, [commissionId]);
 
   const handleSend = async (e) => {
-    e.preventDefault();
+    // 阻止預設行為，防止觸發外層表單
+    if (e) e.preventDefault(); 
+    
     if (!inputText.trim()) return;
     try {
         await addDoc(collection(db, "messages"), {
@@ -106,7 +109,7 @@ const ChatBox = ({ commissionId, currentUser }) => {
             </div>
           ) : (
             messages.map(msg => {
-              const isMe = msg.role === currentUser.role; // 判斷是否為自己發送
+              const isMe = msg.role === currentUser.role; 
               return (
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm ${
@@ -123,17 +126,29 @@ const ChatBox = ({ commissionId, currentUser }) => {
           )}
           <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSend} className="p-2 bg-white border-t border-slate-100 flex gap-2">
+        {/* 修復：改用 div 容器而非 form，並將按鈕 type 設為 button，徹底解決 Enter 重整問題 */}
+        <div className="p-2 bg-white border-t border-slate-100 flex gap-2">
           <input 
             className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-300"
             placeholder="輸入訊息..."
             value={inputText}
             onChange={e => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault(); // 防止 Enter 觸發外層表單提交
+                handleSend();
+              }
+            }}
           />
-          <button type="submit" className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" disabled={!inputText.trim()}>
+          <button 
+            type="button" // 關鍵：明確指定為按鈕，防止被視為 Submit
+            onClick={handleSend} 
+            className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" 
+            disabled={!inputText.trim()}
+          >
             <Send size={18} />
           </button>
-        </form>
+        </div>
       </div>
     </InputBox>
   );
@@ -444,7 +459,7 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                     </InputBox>
                     <InputBox label="繪師留言"><p className="text-sm italic text-slate-600">「{selectedProject.note || '繪師尚未留下訊息。'}」</p></InputBox>
                     
-                    {/* 即時聊天框：插入在詳情下方 */}
+                    {/* 即時聊天框 */}
                     <ChatBox commissionId={selectedProject.id} currentUser={user} />
                 </div>
             </div>
@@ -521,7 +536,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </div>
       </nav>
 
-      {/* 手機版搜尋框 (放在導航下方) */}
+      {/* 手機版搜尋框 */}
       <div className="md:hidden p-4 bg-slate-900 border-t border-slate-800">
          <input 
             placeholder="搜尋..." 
@@ -538,7 +553,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </aside>
 
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto custom-scrollbar">
-            {/* 手機版頂部導航 (取代側邊欄) */}
+            {/* 手機版頂部導航 */}
             <div className="lg:hidden mb-6 overflow-x-auto pb-2 no-scrollbar">
                 <div className="flex gap-2 min-w-max">
                     <NavButtons activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} requestsCount={requestsList.length} mobile />
