@@ -75,8 +75,8 @@ const InputBox = ({ label, children, style = {} }) => (
     backgroundColor: '#ffffff',
     border: '2px solid #cbd5e1',
     borderRadius: '16px',
-    padding: '12px 14px', // 手機版稍微縮減內距
-    marginBottom: '14px', // 減少下方間距
+    padding: '12px 14px', 
+    marginBottom: '14px', 
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
@@ -97,7 +97,7 @@ const InputBox = ({ label, children, style = {} }) => (
 );
 
 // --- 核心聊天室組件 ---
-const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) => { // 手機版高度略減
+const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) => { 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false); 
@@ -603,6 +603,22 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                         <span className="text-xs font-bold text-slate-400">尚未上傳</span>
                     )}
                 </div>
+                {/* 新增：顯示參考圖集 (之前漏掉了) */}
+                {(editItem.referenceImages?.length > 0 || editItem.referenceImage) && (
+                    <InputBox label="委託參考圖集">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                            {(editItem.referenceImages || [editItem.referenceImage]).map((img, idx) => (
+                                <img 
+                                    key={idx}
+                                    src={img} 
+                                    className="w-full aspect-square object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100 shadow-sm" 
+                                    onClick={() => setPreviewImage(img)}
+                                    alt={`Ref ${idx}`}
+                                />
+                            ))}
+                        </div>
+                    </InputBox>
+                )}
                 <form onSubmit={async (e)=>{ e.preventDefault(); await updateDoc(doc(db, "commissions", editItem.id), { ...editItem, updatedAt: new Date().toISOString() }); notify('雲端同步成功'); setEditItem(null); }} className="space-y-1">
                     <div className="grid grid-cols-2 gap-4"><InputBox label="編號"><input style={inputBaseStyle} value={editItem.code} onChange={e=>setEditItem({...editItem, code: e.target.value})} /></InputBox><InputBox label="狀態"><select style={inputBaseStyle} value={editItem.status} onChange={e=>setEditItem({...editItem, status: e.target.value})}><option value="pending">待核准</option><option value="waiting">排單中</option><option value="working">進行中</option><option value="done">已完成</option></select></InputBox></div>
                     <div className="grid grid-cols-2 gap-4"><InputBox label="進度 %"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.progress || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].progress = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox><InputBox label="金額 $"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.price || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].price = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox></div>
