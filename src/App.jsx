@@ -6,7 +6,7 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft, Paperclip, Loader2
+  MessageSquare, ArrowLeft, Paperclip, Loader2, Link
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -101,7 +101,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false); 
-  const [previewImage, setPreviewImage] = useState(null); // 控制大圖顯示
+  const [previewImage, setPreviewImage] = useState(null); 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -136,9 +136,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setIsUploading(true); 
-
     try {
       const compressedDataUrl = await compressImage(file);
       if (compressedDataUrl.length > 1000000) {
@@ -146,7 +144,6 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
         setIsUploading(false);
         return;
       }
-
       await addDoc(collection(db, "messages"), {
         commissionId,
         image: compressedDataUrl, 
@@ -166,31 +163,18 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
 
   return (
     <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-2xl overflow-hidden border border-slate-200`}>
-        {/* 全螢幕圖片檢視器 (LightBox) */}
         {previewImage && (
-          <div 
-            className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
-            onClick={() => setPreviewImage(null)}
-          >
-            <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all">
-              <X size={32} />
-            </button>
-            <img 
-              src={previewImage} 
-              alt="Full Preview" 
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
-              onClick={(e) => e.stopPropagation()} // 防止點擊圖片時關閉
-            />
+          <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}>
+            <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button>
+            <img src={previewImage} alt="Full Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default" onClick={(e) => e.stopPropagation()} />
           </div>
         )}
-
         {isUploading && (
           <div className="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center text-blue-600 backdrop-blur-sm">
             <Loader2 size={32} className="animate-spin mb-2" />
             <p className="text-xs font-black uppercase tracking-widest">Processing Image...</p>
           </div>
         )}
-
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 opacity-50">
@@ -204,18 +188,10 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
                   {msg.type === 'image' ? (
                     <div className={`p-1 rounded-2xl border-2 shadow-sm ${isMe ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                      {/* 修改 onClick 行為：設定 previewImage 狀態，而不是 window.open */}
-                      <img 
-                        src={msg.image} 
-                        alt="sent" 
-                        className="max-w-[200px] max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" 
-                        onClick={() => setPreviewImage(msg.image)} 
-                      />
+                      <img src={msg.image} alt="sent" className="max-w-[200px] max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setPreviewImage(msg.image)} />
                     </div>
                   ) : (
-                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
-                      {msg.text}
-                    </div>
+                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>{msg.text}</div>
                   )}
                   <span className="text-[9px] text-slate-400 mt-1 font-bold px-1 opacity-70">{msg.sender}</span>
                 </div>
@@ -224,43 +200,11 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
           )}
           <div ref={messagesEndRef} />
         </div>
-        
         <div className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
-          <input 
-            type="file" 
-            accept="image/*" 
-            className="hidden" 
-            ref={fileInputRef} 
-            onChange={handleImageUpload} 
-          />
-          <button 
-            type="button"
-            onClick={() => fileInputRef.current.click()}
-            className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95"
-            title="傳送圖片"
-            disabled={isUploading}
-          >
-            <ImageIcon size={20} />
-          </button>
-          
-          <div className="flex-1 relative">
-            <input 
-              className="w-full bg-slate-100 border-none rounded-xl pl-4 pr-10 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" 
-              placeholder="輸入訊息..." 
-              value={inputText} 
-              onChange={e => setInputText(e.target.value)} 
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} 
-            />
-          </div>
-          
-          <button 
-            type="button" 
-            onClick={handleSend} 
-            className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" 
-            disabled={!inputText.trim() || isUploading}
-          >
-            <Send size={20} />
-          </button>
+          <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+          <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={20} /></button>
+          <div className="flex-1 relative"><input className="w-full bg-slate-100 border-none rounded-xl pl-4 pr-10 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} /></div>
+          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" disabled={!inputText.trim() || isUploading}><Send size={20} /></button>
         </div>
     </div>
   );
@@ -464,7 +408,20 @@ const App = () => {
 
       {view === 'login' && <LoginView onAuth={handleAuth} onAnonymousRequest={async (d) => {
         try {
-          const newItem = { ...d, status: 'pending', updatedAt: new Date().toISOString(), isAnonymous: true, items: { avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] };
+          const newItem = { 
+            ...d, 
+            status: 'pending', 
+            updatedAt: new Date().toISOString(), 
+            isAnonymous: true, 
+            referenceImage: d.referenceImage || '', // 新增：儲存參考圖
+            items: { 
+              avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, 
+              halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, 
+              fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, 
+              other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } 
+            }, 
+            timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] 
+          };
           await addDoc(collection(db, "commissions"), newItem);
           showNotification('申請已送出！請記住編號：' + d.code);
         } catch(e) { showNotification(e.message, 'error'); }
@@ -495,7 +452,17 @@ const App = () => {
 // --- 1. 登入介面 ---
 const LoginView = ({ onAuth, onAnonymousRequest }) => {
   const [activeTab, setActiveTab] = useState('login'); 
-  const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '' });
+  const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '', referenceImage: '' });
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        try {
+            const compressed = await compressImage(file);
+            setFormData({ ...formData, referenceImage: compressed });
+        } catch (error) { alert("圖片處理失敗"); }
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50 relative">
@@ -510,7 +477,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
 
         <div className="flex p-1.5 bg-slate-100 rounded-2xl mb-8 overflow-x-auto no-scrollbar gap-1">
             {['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (
-              <button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:''})}} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap px-4 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>
+              <button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:'', referenceImage: ''})}} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap px-4 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>
                 {tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}
               </button>
             ))}
@@ -555,6 +522,21 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
                             <option value="other">其他</option>
                         </select>
                     </InputBox>
+                    <InputBox label="參考圖片 (選填)">
+                         <div className="flex items-center gap-2 mt-1">
+                             <label className="flex items-center gap-2 p-2 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors">
+                                 <ImageIcon size={18} className="text-slate-500" />
+                                 <span className="text-xs font-bold text-slate-500">上傳</span>
+                                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                             </label>
+                             {formData.referenceImage && (
+                                <div className="relative group">
+                                    <img src={formData.referenceImage} alt="ref" className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
+                                    <button type="button" onClick={() => setFormData({...formData, referenceImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"><X size={10} /></button>
+                                </div>
+                             )}
+                         </div>
+                    </InputBox>
                     <InputBox label="需求描述"><textarea style={{...inputBaseStyle, height: '80px', resize:'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
                 </div>
             )}
@@ -577,6 +559,8 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [isNewReqOpen, setNewReqOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [newRequestImg, setNewRequestImg] = useState(''); // 新增：暫存新委託的參考圖
+  const [previewImage, setPreviewImage] = useState(null);
   
   const myCommissions = user.isAnonymous 
     ? allCommissions.filter(c => c.id === user.targetId)
@@ -589,13 +573,25 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
     try {
       const newItem = {
         userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', updatedAt: new Date().toISOString(),
+        referenceImage: newRequestImg || '', // 儲存參考圖
         items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } },
         timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }]
       };
       await addDoc(collection(db, "commissions"), newItem);
       notify('委託申請已送出！');
       setNewReqOpen(false);
+      setNewRequestImg('');
     } catch(err) { notify('發送失敗', 'error'); }
+  };
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        try {
+            const compressed = await compressImage(file);
+            setNewRequestImg(compressed);
+        } catch (error) { alert("圖片處理失敗"); }
+    }
   };
 
   const handleChangePassword = async (e) => {
@@ -615,6 +611,14 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* LightBox */}
+      {previewImage && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}>
+            <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button>
+            <img src={previewImage} alt="Full Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default" onClick={(e) => e.stopPropagation()} />
+          </div>
+      )}
+
       <nav className="bg-white border-b p-4 flex justify-between items-center px-6 lg:px-10 shadow-sm sticky top-0 z-40">
         <div className="flex items-center gap-4">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${user.isAnonymous?'bg-emerald-500':'bg-blue-600'}`}>{user.isAnonymous?<Key size={16}/>:<User size={16}/>}</div>
@@ -683,6 +687,18 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                 <button onClick={()=>setSelectedProject(null)} className="absolute top-6 right-8 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X/></button>
                 <h2 className="text-3xl font-black mb-6">委託詳情 - #{selectedProject.code}</h2>
                 <div className="space-y-4">
+                    {/* 顯示委託時附上的參考圖 */}
+                    {selectedProject.referenceImage && (
+                        <InputBox label="您的參考圖">
+                            <img 
+                                src={selectedProject.referenceImage} 
+                                className="w-full h-40 object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100" 
+                                onClick={() => setPreviewImage(selectedProject.referenceImage)}
+                                alt="Ref"
+                            />
+                        </InputBox>
+                    )}
+
                     <InputBox label="目前進度">
                       <div className="flex items-center gap-4">
                         <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
@@ -713,6 +729,21 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                <InputBox label="委託類別">
                   <select name="type" style={inputBaseStyle} className="cursor-pointer"><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select>
                </InputBox>
+               <InputBox label="參考圖片 (選填)">
+                   <div className="flex items-center gap-2 mt-1">
+                       <label className="flex items-center gap-2 p-2 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors">
+                           <ImageIcon size={18} className="text-slate-500" />
+                           <span className="text-xs font-bold text-slate-500">上傳</span>
+                           <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                       </label>
+                       {newRequestImg && (
+                          <div className="relative group">
+                              <img src={newRequestImg} alt="ref" className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
+                              <button type="button" onClick={() => setNewRequestImg('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"><X size={10} /></button>
+                          </div>
+                       )}
+                   </div>
+               </InputBox>
                <InputBox label="需求細節描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '120px', resize: 'none'}} /></InputBox>
                <button type="submit" className="w-full py-5 bg-pink-500 text-white font-black rounded-2xl shadow-xl hover:bg-pink-600 mt-6">送出請求</button>
             </form>
@@ -731,6 +762,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
   const [editItem, setEditItem] = useState(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState(null);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const filteredAll = useMemo(() => {
     return commissions.filter(c => 
@@ -755,6 +787,14 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* LightBox */}
+      {previewImage && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}>
+            <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button>
+            <img src={previewImage} alt="Full Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default" onClick={(e) => e.stopPropagation()} />
+          </div>
+      )}
+
       <nav className="bg-slate-900 text-white p-5 flex justify-between items-center px-6 lg:px-10 shadow-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="bg-blue-500 p-2 rounded-xl shadow-lg"><Palette size={20}/></div>
@@ -870,6 +910,19 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                             </select>
                         </InputBox>
                     </div>
+                    
+                    {/* 顯示委託人上傳的參考圖 */}
+                    {editItem.referenceImage && (
+                        <InputBox label="委託參考圖">
+                            <img 
+                                src={editItem.referenceImage} 
+                                className="w-full h-40 object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100" 
+                                onClick={() => setPreviewImage(editItem.referenceImage)}
+                                alt="Ref"
+                            />
+                        </InputBox>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <InputBox label="進度 %"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.progress || 0} onChange={e=>{
                             const items = {...editItem.items};
