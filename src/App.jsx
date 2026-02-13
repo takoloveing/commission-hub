@@ -5,7 +5,8 @@ import {
   Edit3, Trash2, MessageCircle, ChevronRight, 
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
-  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert
+  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
+  MessageSquare, ArrowLeft
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -55,8 +56,8 @@ const InputBox = ({ label, children, style = {} }) => (
   </div>
 );
 
-// --- 即時聊天框組件 ---
-const ChatBox = ({ commissionId, currentUser }) => {
+// --- 獨立聊天視窗組件 (核心邏輯) ---
+const ChatWindow = ({ commissionId, currentUser }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
@@ -89,35 +90,106 @@ const ChatBox = ({ commissionId, currentUser }) => {
   };
 
   return (
-    <InputBox label="專案討論室 (Chat)">
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl h-80 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+    <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
-                <MessageCircle size={32} />
-                <p className="text-xs font-bold uppercase tracking-widest">尚無訊息</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 opacity-50">
+                <MessageCircle size={48} strokeWidth={1} />
+                <p className="text-xs font-bold uppercase tracking-widest">No messages yet</p>
             </div>
           ) : (
             messages.map(msg => {
               const isMe = msg.role === currentUser.role; 
               return (
-                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none'}`}>
+                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-1 fade-in duration-300`}>
+                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
                     {msg.text}
                   </div>
-                  <span className="text-[10px] text-slate-400 mt-1 font-black px-1">{msg.sender}</span>
+                  <span className="text-[9px] text-slate-400 mt-1 font-bold px-1 opacity-70">{msg.sender}</span>
                 </div>
               );
             })
           )}
           <div ref={messagesEndRef} />
         </div>
-        <div className="p-2 bg-white border-t border-slate-100 flex gap-2">
-          <input className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} />
-          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" disabled={!inputText.trim()}><Send size={18} /></button>
+        <div className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0">
+          <input 
+            className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" 
+            placeholder="輸入訊息..." 
+            value={inputText} 
+            onChange={e => setInputText(e.target.value)} 
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} 
+          />
+          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none" disabled={!inputText.trim()}><Send size={18} /></button>
+        </div>
+    </div>
+  );
+};
+
+// --- 全新：獨立聊天室介面 (Messenger) ---
+const Messenger = ({ commissions, currentUser }) => {
+  const [selectedCommId, setSelectedCommId] = useState(null);
+  
+  // 手機版：如果選中了聊天室，顯示聊天視窗；否則顯示列表
+  // 電腦版：左列表，右聊天視窗
+  const selectedCommission = commissions.find(c => c.id === selectedCommId);
+
+  return (
+    <div className="h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden flex relative">
+      {/* 左側列表 (在手機版選中聊天時隱藏) */}
+      <div className={`w-full md:w-80 bg-slate-50 border-r border-slate-100 flex flex-col ${selectedCommId ? 'hidden md:flex' : 'flex'}`}>
+        <div className="p-6 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-500"/> 聊天列表</h2>
+        </div>
+        <div className="overflow-y-auto flex-1 p-3 space-y-2 custom-scrollbar">
+            {commissions.length > 0 ? commissions.map(c => (
+                <button 
+                    key={c.id} 
+                    onClick={() => setSelectedCommId(c.id)}
+                    className={`w-full text-left p-4 rounded-2xl transition-all border-2 group relative overflow-hidden ${selectedCommId === c.id ? 'bg-white border-blue-500 shadow-md' : 'bg-white border-transparent hover:border-blue-200 hover:shadow-sm'}`}
+                >
+                    <div className="flex justify-between items-start mb-1">
+                        <span className={`font-black text-sm ${selectedCommId === c.id ? 'text-blue-600' : 'text-slate-700'}`}>
+                            {currentUser.role === 'artist' ? c.name : '繪師'}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">#{c.code}</span>
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 truncate">{c.type} • {c.status}</div>
+                </button>
+            )) : (
+                <div className="text-center p-8 text-slate-400 text-xs font-bold">沒有進行中的對話</div>
+            )}
         </div>
       </div>
-    </InputBox>
+
+      {/* 右側聊天視窗 */}
+      <div className={`flex-1 flex flex-col bg-white ${!selectedCommId ? 'hidden md:flex' : 'flex'} w-full md:w-auto absolute md:relative inset-0 md:inset-auto z-20`}>
+        {selectedCommission ? (
+            <>
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-30 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setSelectedCommId(null)} className="md:hidden p-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft size={20}/></button>
+                        <div>
+                            <h3 className="font-black text-slate-800 text-sm md:text-base">
+                                {currentUser.role === 'artist' ? selectedCommission.name : '繪師'} 
+                                <span className="text-slate-400 font-bold ml-2 text-xs">#{selectedCommission.code}</span>
+                            </h3>
+                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{selectedCommission.type}</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-hidden relative">
+                    <ChatWindow commissionId={selectedCommId} currentUser={currentUser} />
+                </div>
+            </>
+        ) : (
+            <div className="hidden md:flex flex-col items-center justify-center h-full text-slate-300 gap-4">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center"><MessageSquare size={32} /></div>
+                <p className="font-black text-sm uppercase tracking-widest">請從左側選擇一個對話</p>
+            </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -135,7 +207,7 @@ const inputBaseStyle = {
 // --- 主應用程式 ---
 const App = () => {
   const [view, setView] = useState('login'); 
-  const [currentUser, setCurrentUser] = useState(null); // { name, role, mustResetPassword }
+  const [currentUser, setCurrentUser] = useState(null); 
   const [commissions, setCommissions] = useState([]); 
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [artistSettings, setArtistSettings] = useState({ password: 'admin' });
@@ -164,7 +236,6 @@ const App = () => {
   };
 
   const handleAuth = async (action, data) => {
-    // 繪師登入
     if (action === 'artist') {
       if (data.password === artistSettings.password) {
         setCurrentUser({ name: '管理員', role: 'artist' });
@@ -173,7 +244,6 @@ const App = () => {
       return;
     }
 
-    // 匿名查詢
     if (action === 'anonymous_track') {
       const target = commissions.find(c => c.code === data.code && c.password === data.password);
       if (target) {
@@ -183,23 +253,16 @@ const App = () => {
       return;
     }
 
-    // 忘記密碼 (救援登入)
     if (action === 'forgot_password') {
-      // 驗證：名稱是否存在 + 是否擁有該編號的委託
       const userRef = doc(db, "users", data.name);
       const userSnap = await getDoc(userRef);
-      
       if (!userSnap.exists()) {
         showNotification('查無此會員名稱', 'error');
         return;
       }
-
-      // 檢查該會員名下是否有這個編號的委託
       const validCommission = commissions.find(c => c.userName === data.name && c.code === data.code);
-      
       if (validCommission) {
         showNotification('身分驗證成功！請立即重設密碼');
-        // 進入強制重設模式
         setCurrentUser({ name: data.name, role: 'client', mustResetPassword: true });
         setView('client');
       } else {
@@ -208,7 +271,6 @@ const App = () => {
       return;
     }
 
-    // 正常登入/註冊
     const userRef = doc(db, "users", data.name);
     const userSnap = await getDoc(userRef);
 
@@ -250,7 +312,6 @@ const App = () => {
         </div>
       )}
 
-      {/* 強制重設密碼視窗 */}
       {currentUser?.mustResetPassword && (
         <div className="fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl border-4 border-red-100">
@@ -288,7 +349,7 @@ const App = () => {
         <ArtistDashboard 
           commissions={commissions} 
           registeredUsers={registeredUsers}
-          artistSettings={artistSettings} // 傳入設定以供驗證
+          artistSettings={artistSettings} 
           notify={showNotification} 
           onLogout={() => { setView('login'); setCurrentUser(null); }} 
         />
@@ -376,8 +437,9 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
   );
 };
 
-// --- 2. 委託人儀表板 ---
+// --- 2. 委託人儀表板 (新增聊天室 Tab) ---
 const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' or 'messenger'
   const [selectedProject, setSelectedProject] = useState(null);
   const [isNewReqOpen, setNewReqOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
@@ -390,23 +452,10 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd);
-    
     try {
       const newItem = {
-        userName: user.name,
-        name: user.name,
-        contact: data.contact,
-        desc: data.desc,
-        type: data.type,
-        code: 'PENDING',
-        status: 'pending',
-        updatedAt: new Date().toISOString(),
-        items: { 
-            avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, 
-            halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, 
-            fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' },
-            other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } 
-        },
+        userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', updatedAt: new Date().toISOString(),
+        items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } },
         timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }]
       };
       await addDoc(collection(db, "commissions"), newItem);
@@ -419,27 +468,26 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const { oldPwd, newPwd } = Object.fromEntries(fd);
-
     try {
-        // 驗證舊密碼
         const userRef = doc(db, "users", user.name);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists() && userSnap.data().password === oldPwd) {
             await updateDoc(userRef, { password: newPwd });
             notify('密碼修改成功！');
             setSettingsOpen(false);
-        } else {
-            notify('舊密碼錯誤', 'error');
-        }
+        } else notify('舊密碼錯誤', 'error');
     } catch(e) { notify('修改失敗', 'error'); }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <nav className="bg-white border-b p-4 flex justify-between items-center px-6 lg:px-10 shadow-sm sticky top-0 z-40">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${user.isAnonymous?'bg-emerald-500':'bg-blue-600'}`}>{user.isAnonymous?<Key size={16}/>:<User size={16}/>}</div>
-            <span className="font-black text-slate-800 text-sm md:text-base">{user.name} 的空間</span>
+            <div className="flex gap-4">
+                <button onClick={()=>setViewMode('dashboard')} className={`font-black text-sm transition-colors ${viewMode==='dashboard'?'text-blue-600':'text-slate-400 hover:text-slate-600'}`}>我的委託</button>
+                <button onClick={()=>setViewMode('messenger')} className={`font-black text-sm transition-colors flex items-center gap-1 ${viewMode==='messenger'?'text-blue-600':'text-slate-400 hover:text-slate-600'}`}><MessageCircle size={16}/> 訊息</button>
+            </div>
         </div>
         <div className="flex gap-3">
             {!user.isAnonymous && <button onClick={()=>setSettingsOpen(true)} className="text-slate-400 font-bold text-sm hover:text-blue-500 transition-colors flex items-center gap-1"><Settings size={14}/> 設定</button>}
@@ -447,34 +495,39 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto p-4 md:p-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">我的委託</h1>
-            {!user.isAnonymous && (
-                <button onClick={()=>setNewReqOpen(true)} className="w-full md:w-auto bg-pink-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center justify-center gap-2 relative z-10">
-                    <Plus size={18}/> 新委託
-                </button>
-            )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 pb-20">
-            {myCommissions.map(c => (
-              <div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group">
-                <div className="flex justify-between items-start mb-6">
-                    <h3 className="font-black text-xl capitalize">{c.type}</h3>
-                    <div className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white animate-pulse':'bg-blue-50 text-blue-500 border border-blue-100'}`}>{c.status}</div>
+      <main className="max-w-5xl mx-auto p-4 md:p-8 flex-1 w-full">
+        {viewMode === 'dashboard' ? (
+            <>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+                    <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">委託專案</h1>
+                    {!user.isAnonymous && (
+                        <button onClick={()=>setNewReqOpen(true)} className="w-full md:w-auto bg-pink-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center justify-center gap-2 relative z-10">
+                            <Plus size={18}/> 新委託
+                        </button>
+                    )}
                 </div>
-                <div className="text-[10px] font-black text-slate-300 uppercase">編號: #{c.code}</div>
-                <div className="mt-4 flex justify-between items-center text-xs font-bold text-slate-400">
-                    <span>{c.updatedAt.split('T')[0]}</span>
-                    <ChevronRight size={16}/>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 pb-20">
+                    {myCommissions.map(c => (
+                    <div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group">
+                        <div className="flex justify-between items-start mb-6">
+                            <h3 className="font-black text-xl capitalize">{c.type}</h3>
+                            <div className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white animate-pulse':'bg-blue-50 text-blue-500 border border-blue-100'}`}>{c.status}</div>
+                        </div>
+                        <div className="text-[10px] font-black text-slate-300 uppercase">編號: #{c.code}</div>
+                        <div className="mt-4 flex justify-between items-center text-xs font-bold text-slate-400">
+                            <span>{c.updatedAt.split('T')[0]}</span>
+                            <ChevronRight size={16}/>
+                        </div>
+                    </div>
+                    ))}
                 </div>
-              </div>
-            ))}
-        </div>
+            </>
+        ) : (
+            <Messenger commissions={myCommissions} currentUser={user} />
+        )}
       </main>
 
-      {/* 委託人設定 (改密碼) */}
+      {/* 委託人設定 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
@@ -491,7 +544,7 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
         </div>
       )}
 
-      {/* ... (其餘彈窗維持原樣) ... */}
+      {/* 詳情彈窗 */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -506,17 +559,14 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                         <span className="font-black text-blue-600">{selectedProject.items[selectedProject.type]?.progress || 0}%</span>
                       </div>
                     </InputBox>
-                    <InputBox label="委託金額">
-                      <div className="font-black text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div>
-                    </InputBox>
+                    <InputBox label="委託金額"><div className="font-black text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div></InputBox>
                     <InputBox label="繪師留言"><p className="text-sm italic text-slate-600">「{selectedProject.note || '繪師尚未留下訊息。'}」</p></InputBox>
-                    
-                    <ChatBox commissionId={selectedProject.id} currentUser={user} />
                 </div>
             </div>
         </div>
       )}
 
+      {/* 新增委託 */}
       {isNewReqOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl border border-white my-8">
@@ -527,12 +577,7 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
             <form onSubmit={handleNewRequest} className="space-y-2">
                <InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox>
                <InputBox label="委託類別">
-                  <select name="type" style={inputBaseStyle} className="cursor-pointer">
-                    <option value="avatar">大頭貼</option>
-                    <option value="halfBody">半身插畫</option>
-                    <option value="fullBody">全身立繪</option>
-                    <option value="other">其他</option>
-                  </select>
+                  <select name="type" style={inputBaseStyle} className="cursor-pointer"><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select>
                </InputBox>
                <InputBox label="需求細節描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '120px', resize: 'none'}} /></InputBox>
                <button type="submit" className="w-full py-5 bg-pink-500 text-white font-black rounded-2xl shadow-xl hover:bg-pink-600 mt-6">送出請求</button>
@@ -570,17 +615,8 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
     e.preventDefault();
     const fd = new FormData(e.target);
     const { oldPwd, newPwd } = Object.fromEntries(fd);
-
-    if (oldPwd !== artistSettings.password) {
-        notify('舊密碼錯誤', 'error');
-        return;
-    }
-
-    try {
-        await updateDoc(doc(db, "settings", "admin_config"), { password: newPwd });
-        notify('管理密碼更新成功！');
-        setSettingsOpen(false);
-    } catch(e) { notify('更新失敗', 'error'); }
+    if (oldPwd !== artistSettings.password) { notify('舊密碼錯誤', 'error'); return; }
+    try { await updateDoc(doc(db, "settings", "admin_config"), { password: newPwd }); notify('管理密碼更新成功！'); setSettingsOpen(false); } catch(e) { notify('更新失敗', 'error'); }
   };
 
   return (
@@ -593,12 +629,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
         <div className="flex items-center gap-4">
             <div className="relative hidden md:block">
                 <Search className="absolute left-3 top-2.5 text-slate-500" size={16}/>
-                <input 
-                    placeholder="搜尋名稱、編號..." 
-                    className="bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:bg-white/20 transition-all w-64 text-white"
-                    value={searchQuery}
-                    onChange={e=>setSearchQuery(e.target.value)}
-                />
+                <input placeholder="搜尋名稱、編號..." className="bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:bg-white/20 transition-all w-64 text-white" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} />
             </div>
             <button onClick={()=>setSettingsOpen(true)} className="text-slate-400 font-bold text-xs hover:text-white px-3 py-2 bg-white/5 rounded-lg flex items-center gap-1"><Settings size={14}/></button>
             <button onClick={onLogout} className="text-slate-400 font-bold text-xs hover:text-white px-3 py-2 bg-white/5 rounded-lg">登出</button>
@@ -607,12 +638,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
 
       {/* 手機版搜尋框 */}
       <div className="md:hidden p-4 bg-slate-900 border-t border-slate-800">
-         <input 
-            placeholder="搜尋..." 
-            className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none text-white"
-            value={searchQuery}
-            onChange={e=>setSearchQuery(e.target.value)}
-         />
+         <input placeholder="搜尋..." className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none text-white" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} />
       </div>
 
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
@@ -629,48 +655,50 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                 </div>
             </div>
 
-            {activeMainTab !== 'accounts' && (
-                <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-2xl border w-fit shadow-sm overflow-x-auto max-w-full">
-                    {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
-                        <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>
-                            {t === 'all' ? '全部' : t}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            {/* 內容區：帳號、委託、請求列表 (維持原功能) */}
-            {activeMainTab === 'accounts' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-                    {registeredUsers.map(u => (
-                        <div key={u.id} onClick={()=>setSelectedUserDetail(u)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex items-center gap-4">
-                            <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><User size={24}/></div>
-                            <div>
-                                <h3 className="font-black text-lg">{u.name}</h3>
-                                <span className="text-[10px] font-bold text-slate-300">會員帳號</span>
-                            </div>
-                            <ChevronRight className="ml-auto text-slate-200" size={20}/>
-                        </div>
-                    ))}
-                </div>
+            {activeMainTab === 'messages' ? (
+                <Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-                    {getSubFiltered(activeMainTab === 'commissions' ? ongoingList : requestsList).map(c => (
-                        <div key={c.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative">
-                             <div className="flex justify-between items-start mb-6">
-                                <div><h3 className="font-black text-xl">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div>
-                                <div className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white':'bg-blue-50 text-blue-500'}`}>{c.status}</div>
-                             </div>
-                             <div className="text-[10px] font-black text-slate-400 uppercase mb-6 bg-slate-50 p-3 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div>
-                             <button onClick={()=>setEditItem(c)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button>
+                <>
+                    {activeMainTab !== 'accounts' && (
+                        <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-2xl border w-fit shadow-sm overflow-x-auto max-w-full">
+                            {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
+                                <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>{t === 'all' ? '全部' : t}</button>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    )}
+
+                    {activeMainTab === 'accounts' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+                            {registeredUsers.map(u => (
+                                <div key={u.id} onClick={()=>setSelectedUserDetail(u)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><User size={24}/></div>
+                                    <div><h3 className="font-black text-lg">{u.name}</h3><span className="text-[10px] font-bold text-slate-300">會員帳號</span></div>
+                                    <ChevronRight className="ml-auto text-slate-200" size={20}/>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {(activeMainTab === 'commissions' || activeMainTab === 'requests') && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+                            {getSubFiltered(activeMainTab === 'commissions' ? ongoingList : requestsList).map(c => (
+                                <div key={c.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div><h3 className="font-black text-xl">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div>
+                                        <div className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white':'bg-blue-50 text-blue-500'}`}>{c.status}</div>
+                                    </div>
+                                    <div className="text-[10px] font-black text-slate-400 uppercase mb-6 bg-slate-50 p-3 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div>
+                                    <button onClick={()=>setEditItem(c)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
         </main>
       </div>
 
-      {/* 繪師設定彈窗 (含舊密碼驗證) */}
+      {/* 繪師設定彈窗 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
@@ -726,8 +754,6 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                     </div>
                     <InputBox label="留言備註"><textarea style={{...inputBaseStyle, height:'100px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
                     
-                    <ChatBox commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} />
-
                     <div className="flex gap-4 pt-6">
                         <button type="button" onClick={async ()=>{
                             if(confirm('警告：確定要刪除嗎？')){
@@ -782,6 +808,10 @@ const NavButtons = ({ activeMainTab, setActiveMainTab, requestsCount, mobile }) 
         <button onClick={()=>setActiveMainTab('requests')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='requests'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
             {!mobile && <Inbox size={18}/>} 委託請求
             {requestsCount > 0 && <span className={`ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ${mobile && 'ml-2'}`}>{requestsCount}</span>}
+        </button>
+        {/* 新增訊息中心按鈕 */}
+        <button onClick={()=>setActiveMainTab('messages')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='messages'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
+            {!mobile && <MessageCircle size={18}/>} 訊息中心
         </button>
     </>
 );
