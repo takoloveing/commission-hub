@@ -6,7 +6,7 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft
+  MessageSquare, ArrowLeft, Paperclip, Loader2
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -28,6 +28,47 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+
+// --- 圖片壓縮工具函數 ---
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 1280; // 限制最大邊長為 1280px (足夠清晰且檔案小)
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 壓縮為 JPEG，品質 0.7 (通常能將 5MB 壓到 100KB~300KB)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
 
 // --- 樣式組件：方框容器 ---
 const InputBox = ({ label, children, style = {} }) => (
@@ -56,11 +97,13 @@ const InputBox = ({ label, children, style = {} }) => (
   </div>
 );
 
-// --- 獨立聊天視窗組件 (核心邏輯) ---
-const ChatWindow = ({ commissionId, currentUser }) => {
+// --- 核心聊天室組件 (支援大圖壓縮) ---
+const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [isUploading, setIsUploading] = useState(false); // 上傳狀態
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!commissionId) return;
@@ -83,28 +126,79 @@ const ChatWindow = ({ commissionId, currentUser }) => {
           text: inputText,
           sender: currentUser.name,
           role: currentUser.role,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          type: 'text'
         });
         setInputText('');
     } catch (error) { console.error(error); }
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true); // 開始上傳動畫
+
+    try {
+      // 1. 先進行壓縮
+      const compressedDataUrl = await compressImage(file);
+
+      // 2. 檢查壓縮後是否夠小 (Firebase 限制單文件 1MB = 1048576 bytes)
+      // Base64 長度 * 0.75 大約是檔案大小
+      if (compressedDataUrl.length > 1000000) {
+        alert("這張圖片壓縮後還是太大！建議使用外部連結 (Imgur/Drive) 傳送。");
+        setIsUploading(false);
+        return;
+      }
+
+      // 3. 上傳
+      await addDoc(collection(db, "messages"), {
+        commissionId,
+        image: compressedDataUrl, 
+        sender: currentUser.name,
+        role: currentUser.role,
+        createdAt: new Date().toISOString(),
+        type: 'image'
+      });
+    } catch (error) {
+      console.error("Image upload failed", error);
+      alert("圖片處理失敗，請重試");
+    } finally {
+      setIsUploading(false); // 結束上傳動畫
+      if (fileInputRef.current) fileInputRef.current.value = null; // 重置 input
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+    <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-2xl overflow-hidden border border-slate-200`}>
+        {/* 上傳遮罩層 */}
+        {isUploading && (
+          <div className="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center text-blue-600 backdrop-blur-sm">
+            <Loader2 size={32} className="animate-spin mb-2" />
+            <p className="text-xs font-black uppercase tracking-widest">Processing Image...</p>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 opacity-50">
-                <MessageCircle size={48} strokeWidth={1} />
-                <p className="text-xs font-bold uppercase tracking-widest">No messages yet</p>
+                <MessageCircle size={40} strokeWidth={1.5} />
+                <p className="text-xs font-bold uppercase tracking-widest">開始討論吧！</p>
             </div>
           ) : (
             messages.map(msg => {
               const isMe = msg.role === currentUser.role; 
               return (
-                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-1 fade-in duration-300`}>
-                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
-                    {msg.text}
-                  </div>
+                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
+                  {msg.type === 'image' ? (
+                    <div className={`p-1 rounded-2xl border-2 shadow-sm ${isMe ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+                      <img src={msg.image} alt="sent" className="max-w-[200px] max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.image, '_blank')} />
+                    </div>
+                  ) : (
+                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
+                      {msg.text}
+                    </div>
+                  )}
                   <span className="text-[9px] text-slate-400 mt-1 font-bold px-1 opacity-70">{msg.sender}</span>
                 </div>
               );
@@ -112,31 +206,55 @@ const ChatWindow = ({ commissionId, currentUser }) => {
           )}
           <div ref={messagesEndRef} />
         </div>
-        <div className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0">
+        
+        <div className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
           <input 
-            className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" 
-            placeholder="輸入訊息..." 
-            value={inputText} 
-            onChange={e => setInputText(e.target.value)} 
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} 
+            type="file" 
+            accept="image/*" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleImageUpload} 
           />
-          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none" disabled={!inputText.trim()}><Send size={18} /></button>
+          <button 
+            type="button"
+            onClick={() => fileInputRef.current.click()}
+            className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95"
+            title="傳送圖片"
+            disabled={isUploading}
+          >
+            <ImageIcon size={20} />
+          </button>
+          
+          <div className="flex-1 relative">
+            <input 
+              className="w-full bg-slate-100 border-none rounded-xl pl-4 pr-10 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" 
+              placeholder="輸入訊息..." 
+              value={inputText} 
+              onChange={e => setInputText(e.target.value)} 
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} 
+            />
+          </div>
+          
+          <button 
+            type="button" 
+            onClick={handleSend} 
+            className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" 
+            disabled={!inputText.trim() || isUploading}
+          >
+            <Send size={20} />
+          </button>
         </div>
     </div>
   );
 };
 
-// --- 全新：獨立聊天室介面 (Messenger) ---
+// --- 獨立聊天室介面 (Messenger) ---
 const Messenger = ({ commissions, currentUser }) => {
   const [selectedCommId, setSelectedCommId] = useState(null);
-  
-  // 手機版：如果選中了聊天室，顯示聊天視窗；否則顯示列表
-  // 電腦版：左列表，右聊天視窗
   const selectedCommission = commissions.find(c => c.id === selectedCommId);
 
   return (
     <div className="h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden flex relative">
-      {/* 左側列表 (在手機版選中聊天時隱藏) */}
       <div className={`w-full md:w-80 bg-slate-50 border-r border-slate-100 flex flex-col ${selectedCommId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-6 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-500"/> 聊天列表</h2>
@@ -162,7 +280,6 @@ const Messenger = ({ commissions, currentUser }) => {
         </div>
       </div>
 
-      {/* 右側聊天視窗 */}
       <div className={`flex-1 flex flex-col bg-white ${!selectedCommId ? 'hidden md:flex' : 'flex'} w-full md:w-auto absolute md:relative inset-0 md:inset-auto z-20`}>
         {selectedCommission ? (
             <>
@@ -179,7 +296,7 @@ const Messenger = ({ commissions, currentUser }) => {
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden relative">
-                    <ChatWindow commissionId={selectedCommId} currentUser={currentUser} />
+                    <ChatRoom commissionId={selectedCommId} currentUser={currentUser} heightClass="h-full border-none rounded-none" />
                 </div>
             </>
         ) : (
@@ -214,7 +331,6 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 監聽
   useEffect(() => {
     const unsubComms = onSnapshot(query(collection(db, "commissions"), orderBy("updatedAt", "desc")), (snapshot) => {
       setCommissions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
@@ -437,9 +553,9 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
   );
 };
 
-// --- 2. 委託人儀表板 (新增聊天室 Tab) ---
+// --- 2. 委託人儀表板 ---
 const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
-  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' or 'messenger'
+  const [viewMode, setViewMode] = useState('dashboard'); 
   const [selectedProject, setSelectedProject] = useState(null);
   const [isNewReqOpen, setNewReqOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
@@ -527,7 +643,6 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
         )}
       </main>
 
-      {/* 委託人設定 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
@@ -544,7 +659,6 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
         </div>
       )}
 
-      {/* 詳情彈窗 */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -560,13 +674,15 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                       </div>
                     </InputBox>
                     <InputBox label="委託金額"><div className="font-black text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div></InputBox>
-                    <InputBox label="繪師留言"><p className="text-sm italic text-slate-600">「{selectedProject.note || '繪師尚未留下訊息。'}」</p></InputBox>
+                    
+                    <InputBox label="專案討論 (Chat)">
+                        <ChatRoom commissionId={selectedProject.id} currentUser={user} />
+                    </InputBox>
                 </div>
             </div>
         </div>
       )}
 
-      {/* 新增委託 */}
       {isNewReqOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl border border-white my-8">
@@ -698,7 +814,6 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
         </main>
       </div>
 
-      {/* 繪師設定彈窗 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
@@ -715,7 +830,6 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
         </div>
       )}
 
-      {/* 編輯委託彈窗 */}
       {editItem && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -754,6 +868,10 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                     </div>
                     <InputBox label="留言備註"><textarea style={{...inputBaseStyle, height:'100px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
                     
+                    <InputBox label="專案討論 (Chat)">
+                        <ChatRoom commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} />
+                    </InputBox>
+
                     <div className="flex gap-4 pt-6">
                         <button type="button" onClick={async ()=>{
                             if(confirm('警告：確定要刪除嗎？')){
@@ -809,7 +927,6 @@ const NavButtons = ({ activeMainTab, setActiveMainTab, requestsCount, mobile }) 
             {!mobile && <Inbox size={18}/>} 委託請求
             {requestsCount > 0 && <span className={`ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ${mobile && 'ml-2'}`}>{requestsCount}</span>}
         </button>
-        {/* 新增訊息中心按鈕 */}
         <button onClick={()=>setActiveMainTab('messages')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='messages'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
             {!mobile && <MessageCircle size={18}/>} 訊息中心
         </button>
