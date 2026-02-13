@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Palette, User, Lock, LayoutGrid, CheckCircle2, 
   AlertCircle, Clock, Sparkles, LogOut, Plus, 
@@ -12,7 +12,7 @@ import {
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
-  doc, onSnapshot, query, orderBy, setDoc, getDoc 
+  doc, onSnapshot, query, orderBy, setDoc, getDoc, where 
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 // ⚠️ 重要：保留您的 Firebase 設定
@@ -39,7 +39,7 @@ const InputBox = ({ label, children, style = {} }) => (
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-    position: 'relative', // 確保層級
+    position: 'relative', 
     zIndex: 10,
     ...style
   }}>
@@ -54,6 +54,90 @@ const InputBox = ({ label, children, style = {} }) => (
     {children}
   </div>
 );
+
+// --- 新增：即時聊天框組件 ---
+const ChatBox = ({ commissionId, currentUser }) => {
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!commissionId) return;
+    // 監聽該委託ID的訊息
+    const q = query(
+      collection(db, "messages"), 
+      where("commissionId", "==", commissionId), 
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      // 自動捲動到底部
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    });
+    return () => unsubscribe();
+  }, [commissionId]);
+
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+    try {
+        await addDoc(collection(db, "messages"), {
+          commissionId,
+          text: inputText,
+          sender: currentUser.name,
+          role: currentUser.role, // 'artist' or 'client'
+          createdAt: new Date().toISOString()
+        });
+        setInputText('');
+    } catch (error) {
+        console.error("Error sending message: ", error);
+        alert("訊息發送失敗");
+    }
+  };
+
+  return (
+    <InputBox label="專案討論室 (Chat)">
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl h-80 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+                <MessageCircle size={32} />
+                <p className="text-xs font-bold uppercase tracking-widest">尚無訊息，開始討論吧！</p>
+            </div>
+          ) : (
+            messages.map(msg => {
+              const isMe = msg.role === currentUser.role; // 判斷是否為自己發送
+              return (
+                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm ${
+                    isMe 
+                      ? 'bg-blue-600 text-white rounded-br-none' 
+                      : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none'
+                  }`}>
+                    {msg.text}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1 font-black px-1">{msg.sender}</span>
+                </div>
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <form onSubmit={handleSend} className="p-2 bg-white border-t border-slate-100 flex gap-2">
+          <input 
+            className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-300"
+            placeholder="輸入訊息..."
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+          />
+          <button type="submit" className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" disabled={!inputText.trim()}>
+            <Send size={18} />
+          </button>
+        </form>
+      </div>
+    </InputBox>
+  );
+};
 
 const inputBaseStyle = {
   width: '100%',
@@ -201,7 +285,6 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50 relative">
-      {/* 修復：pointer-events-none 讓點擊穿透背景裝飾，解決手機版按鈕無反應問題 */}
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-400/20 rounded-full blur-[100px] animate-pulse pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-300/20 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -223,7 +306,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
             e.preventDefault();
             if(activeTab === 'anonymous_req') onAnonymousRequest(formData);
             else onAuth(activeTab, formData);
-        }} className="space-y-1 relative z-20"> {/* 增加 z-20 確保上層 */}
+        }} className="space-y-1 relative z-20"> 
             {(activeTab === 'login' || activeTab === 'register') && (
                 <>
                     <InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox>
@@ -246,7 +329,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
                         <select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}>
                             <option value="avatar">大頭貼</option>
                             <option value="halfBody">半身</option>
-                            <option value="fullBody">全身</option>
+                            <option value="fullBody">全身立繪</option>
                             <option value="other">其他</option>
                         </select>
                     </InputBox>
@@ -315,7 +398,6 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
       </nav>
 
       <main className="max-w-5xl mx-auto p-4 md:p-8">
-        {/* 修復：手機版改為 flex-col 避免按鈕被擠壓 */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
             <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">我的委託</h1>
             {!user.isAnonymous && (
@@ -361,6 +443,9 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                       <div className="font-black text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div>
                     </InputBox>
                     <InputBox label="繪師留言"><p className="text-sm italic text-slate-600">「{selectedProject.note || '繪師尚未留下訊息。'}」</p></InputBox>
+                    
+                    {/* 即時聊天框：插入在詳情下方 */}
+                    <ChatBox commissionId={selectedProject.id} currentUser={user} />
                 </div>
             </div>
         </div>
@@ -394,7 +479,7 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
   );
 };
 
-// --- 3. 繪師後台 (新增手機版導航) ---
+// --- 3. 繪師後台 ---
 const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => {
   const [activeMainTab, setActiveMainTab] = useState('commissions'); 
   const [subTab, setSubTab] = useState('all'); 
@@ -500,7 +585,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </main>
       </div>
 
-      {/* 編輯委託彈窗 (維持原功能) */}
+      {/* 編輯委託彈窗 (繪師用) */}
       {editItem && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -538,6 +623,10 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
                         }} /></InputBox>
                     </div>
                     <InputBox label="留言備註"><textarea style={{...inputBaseStyle, height:'100px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
+                    
+                    {/* 即時聊天框：繪師端 */}
+                    <ChatBox commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} />
+
                     <div className="flex gap-4 pt-6">
                         <button type="button" onClick={async ()=>{
                             if(confirm('警告：確定要刪除嗎？')){
