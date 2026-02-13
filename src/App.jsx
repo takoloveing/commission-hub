@@ -40,7 +40,7 @@ const compressImage = (file) => {
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-        const MAX_SIZE = 1280; // 限制最大邊長為 1280px (足夠清晰且檔案小)
+        const MAX_SIZE = 1280; 
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -60,7 +60,6 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 壓縮為 JPEG，品質 0.7 (通常能將 5MB 壓到 100KB~300KB)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         resolve(dataUrl);
       };
@@ -97,11 +96,12 @@ const InputBox = ({ label, children, style = {} }) => (
   </div>
 );
 
-// --- 核心聊天室組件 (支援大圖壓縮) ---
+// --- 核心聊天室組件 (新增圖片檢視器) ---
 const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isUploading, setIsUploading] = useState(false); // 上傳狀態
+  const [isUploading, setIsUploading] = useState(false); 
+  const [previewImage, setPreviewImage] = useState(null); // 控制大圖顯示
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -137,21 +137,16 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setIsUploading(true); // 開始上傳動畫
+    setIsUploading(true); 
 
     try {
-      // 1. 先進行壓縮
       const compressedDataUrl = await compressImage(file);
-
-      // 2. 檢查壓縮後是否夠小 (Firebase 限制單文件 1MB = 1048576 bytes)
-      // Base64 長度 * 0.75 大約是檔案大小
       if (compressedDataUrl.length > 1000000) {
-        alert("這張圖片壓縮後還是太大！建議使用外部連結 (Imgur/Drive) 傳送。");
+        alert("圖片太大，請使用外部連結。");
         setIsUploading(false);
         return;
       }
 
-      // 3. 上傳
       await addDoc(collection(db, "messages"), {
         commissionId,
         image: compressedDataUrl, 
@@ -162,16 +157,33 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
       });
     } catch (error) {
       console.error("Image upload failed", error);
-      alert("圖片處理失敗，請重試");
+      alert("圖片處理失敗");
     } finally {
-      setIsUploading(false); // 結束上傳動畫
-      if (fileInputRef.current) fileInputRef.current.value = null; // 重置 input
+      setIsUploading(false); 
+      if (fileInputRef.current) fileInputRef.current.value = null; 
     }
   };
 
   return (
     <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-2xl overflow-hidden border border-slate-200`}>
-        {/* 上傳遮罩層 */}
+        {/* 全螢幕圖片檢視器 (LightBox) */}
+        {previewImage && (
+          <div 
+            className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+            onClick={() => setPreviewImage(null)}
+          >
+            <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all">
+              <X size={32} />
+            </button>
+            <img 
+              src={previewImage} 
+              alt="Full Preview" 
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
+              onClick={(e) => e.stopPropagation()} // 防止點擊圖片時關閉
+            />
+          </div>
+        )}
+
         {isUploading && (
           <div className="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center text-blue-600 backdrop-blur-sm">
             <Loader2 size={32} className="animate-spin mb-2" />
@@ -192,7 +204,13 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-80" }) => {
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
                   {msg.type === 'image' ? (
                     <div className={`p-1 rounded-2xl border-2 shadow-sm ${isMe ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                      <img src={msg.image} alt="sent" className="max-w-[200px] max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.image, '_blank')} />
+                      {/* 修改 onClick 行為：設定 previewImage 狀態，而不是 window.open */}
+                      <img 
+                        src={msg.image} 
+                        alt="sent" 
+                        className="max-w-[200px] max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                        onClick={() => setPreviewImage(msg.image)} 
+                      />
                     </div>
                   ) : (
                     <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
