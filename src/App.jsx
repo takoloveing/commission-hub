@@ -5,7 +5,7 @@ import {
   Edit3, Trash2, MessageCircle, ChevronRight, 
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
-  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox
+  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -39,6 +39,8 @@ const InputBox = ({ label, children, style = {} }) => (
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+    position: 'relative', // 確保層級
+    zIndex: 10,
     ...style
   }}>
     <label style={{
@@ -110,7 +112,6 @@ const App = () => {
     }
 
     if (action === 'anonymous_track') {
-      // 搜尋條件：編號 + 密碼
       const target = commissions.find(c => c.code === data.code && c.password === data.password);
       if (target) {
         setCurrentUser({ name: target.name, role: 'client', isAnonymous: true, targetId: target.id });
@@ -199,8 +200,12 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
   const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '' });
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50">
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-200">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50 relative">
+      {/* 修復：pointer-events-none 讓點擊穿透背景裝飾，解決手機版按鈕無反應問題 */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-400/20 rounded-full blur-[100px] animate-pulse pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-300/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-200 relative z-10">
         <div className="text-center mb-6">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-xl rotate-2"><Palette size={32}/></div>
             <h1 className="text-2xl font-black">Commission<span className="text-blue-500">Hub</span></h1>
@@ -218,7 +223,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
             e.preventDefault();
             if(activeTab === 'anonymous_req') onAnonymousRequest(formData);
             else onAuth(activeTab, formData);
-        }} className="space-y-1">
+        }} className="space-y-1 relative z-20"> {/* 增加 z-20 確保上層 */}
             {(activeTab === 'login' || activeTab === 'register') && (
                 <>
                     <InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox>
@@ -252,7 +257,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
                 <InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>
             )}
 
-            <button type="submit" className={`w-full py-4 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 text-lg mt-6 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':'bg-blue-600 shadow-blue-100'}`}>
+            <button type="submit" className={`w-full py-4 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 text-lg mt-6 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':'bg-blue-600 shadow-blue-100'}`}>
                 {activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : '進入後台'}
             </button>
         </form>
@@ -301,25 +306,26 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <nav className="bg-white border-b p-4 flex justify-between items-center px-10 shadow-sm sticky top-0 z-40">
+      <nav className="bg-white border-b p-4 flex justify-between items-center px-6 lg:px-10 shadow-sm sticky top-0 z-40">
         <div className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${user.isAnonymous?'bg-emerald-500':'bg-blue-600'}`}>{user.isAnonymous?<Key size={16}/>:<User size={16}/>}</div>
-            <span className="font-black text-slate-800">{user.name} 的空間 {user.isAnonymous && '(匿名模式)'}</span>
+            <span className="font-black text-slate-800 text-sm md:text-base">{user.name} 的空間</span>
         </div>
         <button onClick={onLogout} className="text-slate-400 font-bold text-sm hover:text-red-500 transition-colors">登出</button>
       </nav>
 
-      <main className="max-w-5xl mx-auto p-8">
-        <div className="flex justify-between items-end mb-10">
-            <h1 className="text-4xl font-black text-slate-800 tracking-tight">我的委託</h1>
+      <main className="max-w-5xl mx-auto p-4 md:p-8">
+        {/* 修復：手機版改為 flex-col 避免按鈕被擠壓 */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+            <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">我的委託</h1>
             {!user.isAnonymous && (
-                <button onClick={()=>setNewReqOpen(true)} className="bg-pink-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center gap-2">
+                <button onClick={()=>setNewReqOpen(true)} className="w-full md:w-auto bg-pink-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center justify-center gap-2 relative z-10">
                     <Plus size={18}/> 新委託
                 </button>
             )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 pb-20">
             {myCommissions.map(c => (
               <div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group">
                 <div className="flex justify-between items-start mb-6">
@@ -362,8 +368,8 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
 
       {/* 新增委託彈窗 */}
       {isNewReqOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl border border-white">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl border border-white my-8">
             <div className="flex justify-between items-center mb-10">
               <h2 className="text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2>
               <button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button>
@@ -388,7 +394,7 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
   );
 };
 
-// --- 3. 繪師後台 ---
+// --- 3. 繪師後台 (新增手機版導航) ---
 const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => {
   const [activeMainTab, setActiveMainTab] = useState('commissions'); 
   const [subTab, setSubTab] = useState('all'); 
@@ -411,10 +417,10 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <nav className="bg-slate-900 text-white p-5 flex justify-between items-center px-10 shadow-xl sticky top-0 z-50">
+      <nav className="bg-slate-900 text-white p-5 flex justify-between items-center px-6 lg:px-10 shadow-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="bg-blue-500 p-2 rounded-xl shadow-lg"><Palette size={20}/></div>
-          <span className="font-black tracking-tight text-xl">Artist Center</span>
+          <span className="font-black tracking-tight text-lg lg:text-xl">Artist Center</span>
         </div>
         <div className="flex items-center gap-4">
             <div className="relative hidden md:block">
@@ -430,25 +436,34 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </div>
       </nav>
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="w-64 bg-white border-r p-6 space-y-2 hidden lg:flex flex-col">
-            <button onClick={()=>setActiveMainTab('accounts')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-black text-sm transition-all ${activeMainTab==='accounts'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
-                <Users size={18}/> 帳號類
-            </button>
-            <button onClick={()=>setActiveMainTab('commissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-black text-sm transition-all ${activeMainTab==='commissions'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
-                <Activity size={18}/> 委託類
-            </button>
-            <button onClick={()=>setActiveMainTab('requests')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-black text-sm transition-all ${activeMainTab==='requests'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
-                <Inbox size={18}/> 委託請求
-                {requestsList.length > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{requestsList.length}</span>}
-            </button>
+      {/* 手機版搜尋框 (放在導航下方) */}
+      <div className="md:hidden p-4 bg-slate-900 border-t border-slate-800">
+         <input 
+            placeholder="搜尋..." 
+            className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none text-white"
+            value={searchQuery}
+            onChange={e=>setSearchQuery(e.target.value)}
+         />
+      </div>
+
+      <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
+        {/* 電腦版側邊欄 */}
+        <aside className="w-64 bg-white border-r p-6 space-y-2 hidden lg:flex flex-col shrink-0">
+            <NavButtons activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} requestsCount={requestsList.length} />
         </aside>
 
-        <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto custom-scrollbar">
+            {/* 手機版頂部導航 (取代側邊欄) */}
+            <div className="lg:hidden mb-6 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-2 min-w-max">
+                    <NavButtons activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} requestsCount={requestsList.length} mobile />
+                </div>
+            </div>
+
             {activeMainTab !== 'accounts' && (
-                <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-2xl border w-fit shadow-sm">
+                <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-2xl border w-fit shadow-sm overflow-x-auto max-w-full">
                     {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
-                        <button key={t} onClick={()=>setSubTab(t)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>
+                        <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>
                             {t === 'all' ? '全部' : t}
                         </button>
                     ))}
@@ -456,7 +471,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
             )}
 
             {activeMainTab === 'accounts' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                     {registeredUsers.map(u => (
                         <div key={u.id} onClick={()=>setSelectedUserDetail(u)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex items-center gap-4">
                             <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><User size={24}/></div>
@@ -469,7 +484,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
                     ))}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
                     {getSubFiltered(activeMainTab === 'commissions' ? ongoingList : requestsList).map(c => (
                         <div key={c.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative">
                              <div className="flex justify-between items-start mb-6">
@@ -485,28 +500,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </main>
       </div>
 
-      {/* 會員完整委託詳情彈窗 */}
-      {selectedUserDetail && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-[3.5rem] w-full max-w-4xl p-12 shadow-2xl relative border border-white my-8">
-                <button onClick={()=>setSelectedUserDetail(null)} className="absolute top-10 right-10 p-2 bg-slate-100 rounded-full"><X/></button>
-                <h2 className="text-3xl font-black mb-10 flex items-center gap-3"><Users className="text-blue-500"/> {selectedUserDetail.name} 的委託紀錄</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {commissions.filter(c => c.userName === selectedUserDetail.name).map(c => (
-                        <div key={c.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-200 flex justify-between items-center">
-                            <div>
-                                <h4 className="font-black text-slate-800 text-xl capitalize">{c.type}</h4>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">#{c.code} | {c.status}</p>
-                            </div>
-                            <button onClick={()=>{setEditItem(c); setSelectedUserDetail(null);}} className="p-4 bg-white rounded-2xl shadow-sm text-blue-500 hover:bg-blue-600 hover:text-white transition-all"><Edit3 size={20}/></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* 核心編輯彈窗 */}
+      {/* 編輯委託彈窗 (維持原功能) */}
       {editItem && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -558,9 +552,49 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
             </div>
         </div>
       )}
+      
+      {/* 帳號詳情彈窗 */}
+      {selectedUserDetail && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-[3rem] w-full max-w-4xl p-10 shadow-2xl relative my-8 border border-white">
+                <button onClick={()=>setSelectedUserDetail(null)} className="absolute top-8 right-8 p-2 bg-slate-100 rounded-full"><X/></button>
+                <div className="mb-10 flex items-center gap-4">
+                    <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-500"><Users size={32}/></div>
+                    <h2 className="text-3xl font-black">{selectedUserDetail.name} 的所有委託</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {commissions.filter(c => c.userName === selectedUserDetail.name).map(c => (
+                        <div key={c.id} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 flex justify-between items-center">
+                            <div>
+                                <h4 className="font-black text-slate-800">{c.type}</h4>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">#{c.code} | {c.status}</span>
+                            </div>
+                            <button onClick={()=>{setEditItem(c); setSelectedUserDetail(null);}} className="p-2 bg-white rounded-xl shadow-sm text-blue-500"><Edit3 size={18}/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// 抽離的導航按鈕組件，方便同時用於側邊欄和手機版
+const NavButtons = ({ activeMainTab, setActiveMainTab, requestsCount, mobile }) => (
+    <>
+        <button onClick={()=>setActiveMainTab('accounts')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='accounts'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
+            {!mobile && <Users size={18}/>} 帳號類
+        </button>
+        <button onClick={()=>setActiveMainTab('commissions')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='commissions'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
+            {!mobile && <Activity size={18}/>} 委託類
+        </button>
+        <button onClick={()=>setActiveMainTab('requests')} className={`${mobile ? 'px-6 py-2 rounded-xl text-xs whitespace-nowrap' : 'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm'} font-black transition-all ${activeMainTab==='requests'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-slate-50'}`}>
+            {!mobile && <Inbox size={18}/>} 委託請求
+            {requestsCount > 0 && <span className={`ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ${mobile && 'ml-2'}`}>{requestsCount}</span>}
+        </button>
+    </>
+);
 
 const styles = `
   .no-scrollbar::-webkit-scrollbar { display: none; }
