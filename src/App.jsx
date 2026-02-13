@@ -4,7 +4,8 @@ import {
   AlertCircle, Clock, Sparkles, LogOut, Plus, 
   Edit3, Trash2, MessageCircle, ChevronRight, 
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
-  Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud
+  Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
+  Mail, Send, FileQuestion
 } from 'lucide-react';
 
 // --- 引入 Firebase ---
@@ -12,26 +13,7 @@ import {
 import { db } from './firebase'; 
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
 
-// 這是備用的初始資料 (只在第一次上傳到雲端時使用)
-const MOCK_DATA = [
-  {
-    name: '星野',
-    code: 'STAR01',
-    status: 'working',
-    note: '線稿精修中，附上目前的黑白草圖供確認。',
-    items: {
-      avatar: { active: true, progress: 100, price: 1500, payment: 'full', preview: 'https://images.unsplash.com/photo-1544511916-0148ccdeb877?w=500&auto=format&fit=crop&q=60' }, 
-      halfBody: { active: true, progress: 65, price: 3000, payment: 'deposit', preview: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&auto=format&fit=crop&q=60' },
-      fullBody: { active: false, progress: 0, price: 5000, payment: 'none', preview: '' },
-    },
-    timeline: [
-      { date: '2024-02-14', title: '線稿進度更新', desc: '半身立繪線稿已完成 65%' },
-    ],
-    updatedAt: '2024-02-14'
-  }
-];
-
-const GlobalAnnouncement = "🌊 系統升級：資料已連接雲端，繪師更新後您會即時看到！";
+const GlobalAnnouncement = "🌊 系統升級：現在開放線上委託申請囉！歡迎點擊首頁按鈕發起委託。";
 
 const PAYMENT_STATUS = {
   none: { label: '未付款', color: 'text-slate-400', bg: 'bg-slate-100', icon: Wallet },
@@ -43,42 +25,23 @@ const PAYMENT_STATUS = {
 const App = () => {
   const [view, setView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
-  const [commissions, setCommissions] = useState([]); // 改成空陣列，等待從雲端抓資料
+  const [commissions, setCommissions] = useState([]); 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 監聽雲端資料庫變化 (Real-time)
+  // 監聽雲端資料庫
   useEffect(() => {
-    // 建立查詢：從 'commissions' 集合抓取資料，並依照 updatedAt 排序
     const q = query(collection(db, "commissions"), orderBy("updatedAt", "desc"));
-    
-    // 開啟即時監聽
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setCommissions(data);
       setLoading(false);
     }, (error) => {
-      console.error("Firebase 連線錯誤:", error);
-      showNotification("資料庫連線失敗，請檢查 firebase.js 設定", "error");
+      console.error("Firebase Error:", error);
       setLoading(false);
     });
-
-    // 組件卸載時取消監聽
     return () => unsubscribe();
   }, []);
-
-  // 上傳初始資料到雲端 (僅供第一次使用)
-  const uploadInitialData = async () => {
-    try {
-      for (const item of MOCK_DATA) {
-        await addDoc(collection(db, "commissions"), item);
-      }
-      showNotification('初始資料上傳成功！');
-    } catch (e) {
-      console.error(e);
-      showNotification('上傳失敗: ' + e.message, 'error');
-    }
-  };
 
   const handleLogin = (role, data) => {
     if (role === 'artist') {
@@ -88,12 +51,12 @@ const App = () => {
         showNotification('密碼錯誤', 'error');
       }
     } else if (role === 'client') {
-      const target = commissions.find(c => c.name === data.name && c.code === data.code);
+      const target = commissions.find(c => c.name === data.name && c.code === data.code && c.status !== 'pending');
       if (target) {
         setCurrentUser(target);
         setView('client');
       } else {
-        showNotification('找不到資料，請確認名稱與編號', 'error');
+        showNotification('找不到資料，或委託尚未被接受', 'error');
       }
     }
   };
@@ -101,6 +64,33 @@ const App = () => {
   const showNotification = (msg, type = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  // 處理發起新委託
+  const handleNewRequest = async (requestData) => {
+    try {
+      // 預設資料結構
+      const newCommission = {
+        ...requestData,
+        code: 'PENDING', // 暫時沒有編號
+        status: 'pending', // 狀態：待確認
+        note: '您的委託已送出，繪師審核中。請留意您的聯絡信箱/方式。',
+        items: {
+          avatar: { active: requestData.type === 'avatar', progress: 0, price: 0, payment: 'none', preview: '' },
+          halfBody: { active: requestData.type === 'halfBody', progress: 0, price: 0, payment: 'none', preview: '' },
+          fullBody: { active: requestData.type === 'fullBody', progress: 0, price: 0, payment: 'none', preview: '' },
+        },
+        timeline: [
+          { date: new Date().toISOString().split('T')[0], title: '委託申請', desc: '已送出委託申請，等待繪師確認。' }
+        ],
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
+
+      await addDoc(collection(db, "commissions"), newCommission);
+      showNotification('委託申請已送出！請等待繪師聯繫。');
+    } catch (e) {
+      showNotification('申請失敗: ' + e.message, 'error');
+    }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-blue-600 font-bold">資料庫連線中...</div>;
@@ -114,7 +104,7 @@ const App = () => {
         </div>
       )}
 
-      {view === 'login' && <LoginView onLogin={handleLogin} commissions={commissions} onUpload={uploadInitialData} />}
+      {view === 'login' && <LoginView onLogin={handleLogin} onRequest={handleNewRequest} />}
       
       {view === 'client' && (
         <ClientDashboard 
@@ -135,10 +125,11 @@ const App = () => {
   );
 };
 
-// --- 登入介面 ---
-const LoginView = ({ onLogin, commissions, onUpload }) => {
+// --- 1. 登入介面 (新增委託按鈕) ---
+const LoginView = ({ onLogin, onRequest }) => {
   const [activeTab, setActiveTab] = useState('client');
   const [formData, setFormData] = useState({ name: '', code: '', password: '' });
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-slate-50">
@@ -156,40 +147,101 @@ const LoginView = ({ onLogin, commissions, onUpload }) => {
           </div>
 
           <div className="flex p-2 mx-8 bg-slate-100/80 rounded-2xl mb-6">
-            <button onClick={() => setActiveTab('client')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'client' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>委託查詢</button>
+            <button onClick={() => setActiveTab('client')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'client' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>查詢進度</button>
             <button onClick={() => setActiveTab('artist')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'artist' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>繪師後台</button>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); onLogin(activeTab, formData); }} className="px-8 pb-10 space-y-5">
+          <form onSubmit={(e) => { e.preventDefault(); onLogin(activeTab, formData); }} className="px-8 pb-8 space-y-5">
             {activeTab === 'client' ? (
               <>
-                <input required type="text" placeholder="您的名稱" className="w-full pl-4 pr-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                <input required type="text" placeholder="查詢編號 (ex: STAR01)" className="w-full pl-4 pr-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
+                <input required type="text" placeholder="您的名稱" className="input-field" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <input required type="text" placeholder="查詢編號 (ex: STAR01)" className="input-field" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
               </>
             ) : (
-              <input required type="password" placeholder="管理密碼 (admin)" className="w-full pl-4 pr-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <input required type="password" placeholder="管理密碼 (admin)" className="input-field" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
             )}
-            <button type="submit" className="w-full py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-500/30 bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 active:scale-[0.98] transition-all">
+            <button type="submit" className="w-full py-4 rounded-2xl font-bold text-white shadow-lg bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 active:scale-[0.98] transition-all">
               {activeTab === 'client' ? '查詢進度' : '進入後台'}
             </button>
           </form>
-          
-          {/* 初始化按鈕：如果資料庫是空的，顯示這個按鈕 */}
-          {commissions.length === 0 && (
-            <div className="px-8 pb-8 text-center">
-              <p className="text-xs text-slate-400 mb-2">資料庫目前是空的</p>
-              <button type="button" onClick={onUpload} className="text-xs flex items-center justify-center gap-1 mx-auto text-blue-500 hover:underline">
-                <Cloud size={12}/> 上傳測試資料 (星野)
+
+          {/* 新增：發起委託按鈕 */}
+          {activeTab === 'client' && (
+            <div className="px-8 pb-10">
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium">還沒有委託嗎？</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+              <button 
+                onClick={() => setIsRequestModalOpen(true)}
+                className="w-full py-3 rounded-2xl font-bold text-pink-500 border-2 border-pink-100 bg-pink-50 hover:bg-pink-100 hover:border-pink-200 transition-all flex items-center justify-center gap-2"
+              >
+                <Sparkles size={18} /> 我要委託
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* 委託申請 Modal */}
+      {isRequestModalOpen && (
+        <RequestModal onClose={() => setIsRequestModalOpen(false)} onSubmit={onRequest} />
+      )}
     </div>
   );
 };
 
-// --- 2. 委託人儀表板 ---
+// --- 新增：委託申請表單 ---
+const RequestModal = ({ onClose, onSubmit }) => {
+  const [form, setForm] = useState({ name: '', contact: '', type: 'avatar', desc: '' });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(form);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
+            <Mail className="text-pink-500" /> 委託申請
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">您的暱稱</label>
+            <input required type="text" className="input-field" placeholder="ex: 星野" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          </div>
+          <div>
+            <label className="label">聯絡方式 (Email/Discord/Twitter)</label>
+            <input required type="text" className="input-field" placeholder="方便繪師聯繫您" value={form.contact} onChange={e => setForm({...form, contact: e.target.value})} />
+          </div>
+          <div>
+            <label className="label">委託項目</label>
+            <select className="input-field" value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
+              <option value="avatar">大頭貼</option>
+              <option value="halfBody">半身插畫</option>
+              <option value="fullBody">全身立繪</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">需求簡述</label>
+            <textarea className="input-field resize-none h-24" placeholder="請描述您的角色特徵、構圖想法..." value={form.desc} onChange={e => setForm({...form, desc: e.target.value})}></textarea>
+          </div>
+          <button type="submit" className="w-full py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-all shadow-lg shadow-pink-200 mt-2 flex items-center justify-center gap-2">
+            <Send size={18} /> 送出申請
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- 2. 委託人儀表板 (維持不變) ---
 const ClientDashboard = ({ user, data, onLogout }) => {
   if (!data) return <div className="p-10 text-center">資料讀取錯誤或已被刪除 <button onClick={onLogout} className="underline">登出</button></div>;
 
@@ -361,14 +413,18 @@ const ClientDashboard = ({ user, data, onLogout }) => {
   );
 };
 
-// --- 3. 繪師後台 (雲端寫入版) ---
+// --- 3. 繪師後台 (更新版) ---
 const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
+  // 區分待審核與進行中
+  const pendingRequests = commissions.filter(c => c.status === 'pending');
+  const activeCommissions = commissions.filter(c => c.status !== 'pending');
+
   const openModal = (item = null) => {
     setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {
-      name: '', code: '', status: 'waiting', note: '',
+      name: '', code: '', status: 'waiting', note: '', contact: '',
       items: {
         avatar: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
         halfBody: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
@@ -380,8 +436,13 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
     setIsModalOpen(true);
   };
 
-  // 儲存到 Firebase
   const handleSave = async (data) => {
+    // 防呆：如果是 pending 轉正，必須填寫編號
+    if (data.status !== 'pending' && (!data.code || data.code === 'PENDING')) {
+        notify('請為新委託設定一個正式編號', 'error');
+        return;
+    }
+
     try {
       const newTimelineEvent = {
         date: new Date().toISOString().split('T')[0],
@@ -395,13 +456,11 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
       };
 
       if (data.id) {
-        // 更新現有
         await updateDoc(doc(db, "commissions", data.id), dataToSave);
-        notify('雲端資料已更新');
+        notify(data.status === 'pending' ? '申請已更新' : '委託資料已更新');
       } else {
-        // 新增
         await addDoc(collection(db, "commissions"), dataToSave);
-        notify('新委託已上傳雲端');
+        notify('新委託已建立');
       }
       setIsModalOpen(false);
     } catch (e) {
@@ -409,9 +468,8 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
     }
   };
 
-  // 從 Firebase 刪除
   const handleDelete = async (id) => {
-    if (confirm('確定要從雲端刪除嗎？無法復原。')) {
+    if (confirm('確定要刪除嗎？無法復原。')) {
       try {
         await deleteDoc(doc(db, "commissions", id));
         notify('資料已刪除');
@@ -436,8 +494,35 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
           <button onClick={() => openModal()} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all"><Plus size={18} /> 新增</button>
         </div>
 
+        {/* 待審核區塊 */}
+        {pendingRequests.length > 0 && (
+          <div className="mb-10">
+            <h3 className="text-lg font-bold text-slate-500 mb-4 flex items-center gap-2">
+                <FileQuestion className="text-pink-500" /> 待審核申請 ({pendingRequests.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {pendingRequests.map(item => (
+                    <div key={item.id} className="bg-pink-50 border-2 border-pink-100 rounded-3xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 bg-pink-500 text-white text-xs px-3 py-1 rounded-bl-xl font-bold">New Request</div>
+                        <h3 className="font-bold text-lg text-slate-800 mb-1">{item.name}</h3>
+                        <p className="text-sm text-slate-500 mb-3 flex items-center gap-1"><Mail size={12}/> {item.contact}</p>
+                        <div className="bg-white/60 p-3 rounded-xl text-sm text-slate-600 mb-4 line-clamp-3">
+                            {item.desc || '無詳細描述'}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => openModal(item)} className="flex-1 py-2 bg-pink-500 text-white rounded-xl font-bold hover:bg-pink-600 transition-all">審核 / 接受</button>
+                            <button onClick={() => handleDelete(item.id)} className="px-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl"><Trash2 size={18} /></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* 進行中委託 */}
+        <h3 className="text-lg font-bold text-slate-500 mb-4">進行中委託</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {commissions.map(item => (
+          {activeCommissions.map(item => (
             <div key={item.id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
               <div className="flex justify-between items-start mb-4">
                 <div><h3 className="font-bold text-lg text-slate-800">{item.name}</h3><span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">#{item.code}</span></div>
@@ -464,7 +549,7 @@ const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   );
 };
 
-// --- 組件: 編輯視窗 (維持不變) ---
+// --- 組件: 編輯視窗 (微調) ---
 const EditModal = ({ data, onClose, onSave }) => {
   const [form, setForm] = useState(data);
   const [tab, setTab] = useState('info'); 
@@ -483,9 +568,14 @@ const EditModal = ({ data, onClose, onSave }) => {
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {tab === 'info' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4"><div><label className="label">名稱</label><input type="text" className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div><div><label className="label">編號</label><input type="text" className="input font-mono" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div></div>
-              <div><label className="label">狀態</label><div className="flex bg-slate-100 p-1 rounded-xl">{['waiting', 'working', 'done'].map(s => (<button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>))}</div></div>
-              <div><label className="label">備註</label><textarea className="input resize-none" rows="3" value={form.note} onChange={e => setForm({...form, note: e.target.value})}></textarea></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="label">名稱</label><input type="text" className="input-field" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div><div><label className="label">編號 (審核時請修改)</label><input type="text" className="input-field font-mono text-blue-600" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div></div>
+              <div><label className="label">聯絡方式</label><input type="text" className="input-field" value={form.contact || ''} onChange={e => setForm({...form, contact: e.target.value})} placeholder="Email / Discord" /></div>
+              <div><label className="label">狀態</label><div className="flex bg-slate-100 p-1 rounded-xl">
+                  {['pending', 'waiting', 'working', 'done'].map(s => (
+                    <button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>
+                  ))}
+                </div></div>
+              <div><label className="label">需求描述 / 備註</label><textarea className="input-field resize-none h-24" value={form.desc || form.note} onChange={e => setForm({...form, note: e.target.value, desc: e.target.value})}></textarea></div>
             </div>
           )}
           {['avatar', 'halfBody', 'fullBody'].includes(tab) && (
@@ -494,25 +584,30 @@ const EditModal = ({ data, onClose, onSave }) => {
               {form.items[tab].active && (
                 <div className="space-y-5 animate-in slide-in-from-top-2">
                    <div><label className="label">進度 ({form.items[tab].progress}%)</label><input type="range" min="0" max="100" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" value={form.items[tab].progress} onChange={e => updateItem(tab, 'progress', parseInt(e.target.value))} /></div>
-                   <div className="grid grid-cols-2 gap-4"><div><label className="label">金額</label><input type="number" className="input" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div><div><label className="label">付款</label><select className="input" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div></div>
-                   <div><label className="label">預覽圖連結 (URL)</label><input type="text" className="input text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} /><p className="text-[10px] text-slate-400 mt-1">請貼上圖片網址</p></div>
+                   <div className="grid grid-cols-2 gap-4"><div><label className="label">金額</label><input type="number" className="input-field" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div><div><label className="label">付款</label><select className="input-field" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div></div>
+                   <div><label className="label">預覽圖連結 (URL)</label><input type="text" className="input-field text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} /><p className="text-[10px] text-slate-400 mt-1">請貼上圖片網址</p></div>
                 </div>
               )}
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-slate-100 flex gap-3 shrink-0 bg-white"><button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button><button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存並更新</button></div>
+        <div className="p-4 border-t border-slate-100 flex gap-3 shrink-0 bg-white"><button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button><button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存變更</button></div>
       </div>
     </div>
   );
 };
 
-// --- Helper (維持不變) ---
 const StatusBadge = ({ status, mini }) => {
-  const config = { waiting: { bg: 'bg-slate-100', text: 'text-slate-500', label: '排單中', icon: Clock }, working: { bg: 'bg-blue-50', text: 'text-blue-600', label: '繪製中', icon: Activity }, done: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: '已完成', icon: CheckCircle2 } };
-  const { bg, text, label, icon: Icon } = config[status];
+  const config = { 
+    pending: { bg: 'bg-pink-50', text: 'text-pink-600', label: '待審核', icon: FileQuestion },
+    waiting: { bg: 'bg-slate-100', text: 'text-slate-500', label: '排單中', icon: Clock }, 
+    working: { bg: 'bg-blue-50', text: 'text-blue-600', label: '繪製中', icon: Activity }, 
+    done: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: '已完成', icon: CheckCircle2 } 
+  };
+  const { bg, text, label, icon: Icon } = config[status] || config['waiting'];
   if (mini) return <span className={`${bg} ${text} p-1.5 rounded-lg`}><Icon size={14} /></span>;
   return <span className={`${bg} ${text} rounded-full font-bold px-4 py-2 text-sm flex items-center gap-2 border border-white shadow-sm`}><Icon size={16} /> {label}</span>;
 };
-const styles = `.label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2; } .input { @apply w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`;
+
+const styles = `.label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2; } .input-field { @apply w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`;
 export default App;
