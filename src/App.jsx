@@ -5,7 +5,7 @@ import {
   Edit3, Trash2, MessageCircle, ChevronRight, 
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
-  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu
+  Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -55,7 +55,7 @@ const InputBox = ({ label, children, style = {} }) => (
   </div>
 );
 
-// --- 修復版：即時聊天框組件 ---
+// --- 即時聊天框組件 ---
 const ChatBox = ({ commissionId, currentUser }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -63,14 +63,9 @@ const ChatBox = ({ commissionId, currentUser }) => {
 
   useEffect(() => {
     if (!commissionId) return;
-    // 修復：移除 orderBy，避免 Firebase 需要建立索引導致無法顯示
-    const q = query(
-      collection(db, "messages"), 
-      where("commissionId", "==", commissionId)
-    );
+    const q = query(collection(db, "messages"), where("commissionId", "==", commissionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // 在客戶端進行時間排序
       msgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -79,23 +74,18 @@ const ChatBox = ({ commissionId, currentUser }) => {
   }, [commissionId]);
 
   const handleSend = async (e) => {
-    // 阻止預設行為，防止觸發外層表單
     if (e) e.preventDefault(); 
-    
     if (!inputText.trim()) return;
     try {
         await addDoc(collection(db, "messages"), {
           commissionId,
           text: inputText,
           sender: currentUser.name,
-          role: currentUser.role, // 'artist' or 'client'
+          role: currentUser.role,
           createdAt: new Date().toISOString()
         });
         setInputText('');
-    } catch (error) {
-        console.error("Error sending message: ", error);
-        alert("訊息發送失敗");
-    }
+    } catch (error) { console.error(error); }
   };
 
   return (
@@ -105,18 +95,14 @@ const ChatBox = ({ commissionId, currentUser }) => {
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
                 <MessageCircle size={32} />
-                <p className="text-xs font-bold uppercase tracking-widest">尚無訊息，開始討論吧！</p>
+                <p className="text-xs font-bold uppercase tracking-widest">尚無訊息</p>
             </div>
           ) : (
             messages.map(msg => {
               const isMe = msg.role === currentUser.role; 
               return (
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm ${
-                    isMe 
-                      ? 'bg-blue-600 text-white rounded-br-none' 
-                      : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none'
-                  }`}>
+                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-bold shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none'}`}>
                     {msg.text}
                   </div>
                   <span className="text-[10px] text-slate-400 mt-1 font-black px-1">{msg.sender}</span>
@@ -126,28 +112,9 @@ const ChatBox = ({ commissionId, currentUser }) => {
           )}
           <div ref={messagesEndRef} />
         </div>
-        {/* 修復：改用 div 容器而非 form，並將按鈕 type 設為 button，徹底解決 Enter 重整問題 */}
         <div className="p-2 bg-white border-t border-slate-100 flex gap-2">
-          <input 
-            className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700 placeholder:text-slate-300"
-            placeholder="輸入訊息..."
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault(); // 防止 Enter 觸發外層表單提交
-                handleSend();
-              }
-            }}
-          />
-          <button 
-            type="button" // 關鍵：明確指定為按鈕，防止被視為 Submit
-            onClick={handleSend} 
-            className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" 
-            disabled={!inputText.trim()}
-          >
-            <Send size={18} />
-          </button>
+          <input className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none text-slate-700" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} />
+          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50" disabled={!inputText.trim()}><Send size={18} /></button>
         </div>
       </div>
     </InputBox>
@@ -168,31 +135,26 @@ const inputBaseStyle = {
 // --- 主應用程式 ---
 const App = () => {
   const [view, setView] = useState('login'); 
-  const [currentUser, setCurrentUser] = useState(null); 
+  const [currentUser, setCurrentUser] = useState(null); // { name, role, mustResetPassword }
   const [commissions, setCommissions] = useState([]); 
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [artistSettings, setArtistSettings] = useState({ password: 'admin' });
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // 監聽
   useEffect(() => {
-    const qCommissions = query(collection(db, "commissions"), orderBy("updatedAt", "desc"));
-    const unsubComms = onSnapshot(qCommissions, (snapshot) => {
+    const unsubComms = onSnapshot(query(collection(db, "commissions"), orderBy("updatedAt", "desc")), (snapshot) => {
       setCommissions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
-
-    const qUsers = collection(db, "users");
-    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       setRegisteredUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setLoading(false);
     });
-
-    const settingsRef = doc(db, "settings", "admin_config");
-    const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+    const unsubSettings = onSnapshot(doc(db, "settings", "admin_config"), (docSnap) => {
       if (docSnap.exists()) setArtistSettings(docSnap.data());
-      else setDoc(settingsRef, { password: 'admin' });
+      else setDoc(doc(db, "settings", "admin_config"), { password: 'admin' });
     });
-
     return () => { unsubComms(); unsubUsers(); unsubSettings(); };
   }, []);
 
@@ -202,6 +164,7 @@ const App = () => {
   };
 
   const handleAuth = async (action, data) => {
+    // 繪師登入
     if (action === 'artist') {
       if (data.password === artistSettings.password) {
         setCurrentUser({ name: '管理員', role: 'artist' });
@@ -210,22 +173,47 @@ const App = () => {
       return;
     }
 
+    // 匿名查詢
     if (action === 'anonymous_track') {
       const target = commissions.find(c => c.code === data.code && c.password === data.password);
       if (target) {
         setCurrentUser({ name: target.name, role: 'client', isAnonymous: true, targetId: target.id });
         setView('client');
+      } else showNotification('編號或查詢密碼錯誤', 'error');
+      return;
+    }
+
+    // 忘記密碼 (救援登入)
+    if (action === 'forgot_password') {
+      // 驗證：名稱是否存在 + 是否擁有該編號的委託
+      const userRef = doc(db, "users", data.name);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        showNotification('查無此會員名稱', 'error');
+        return;
+      }
+
+      // 檢查該會員名下是否有這個編號的委託
+      const validCommission = commissions.find(c => c.userName === data.name && c.code === data.code);
+      
+      if (validCommission) {
+        showNotification('身分驗證成功！請立即重設密碼');
+        // 進入強制重設模式
+        setCurrentUser({ name: data.name, role: 'client', mustResetPassword: true });
+        setView('client');
       } else {
-        showNotification('編號或查詢密碼錯誤', 'error');
+        showNotification('驗證失敗：您名下沒有此委託編號', 'error');
       }
       return;
     }
 
+    // 正常登入/註冊
     const userRef = doc(db, "users", data.name);
     const userSnap = await getDoc(userRef);
 
     if (action === 'register') {
-      if (userSnap.exists()) showNotification('名稱已被註冊', 'error');
+      if (userSnap.exists()) showNotification('名稱已被註冊，請換一個', 'error');
       else {
         await setDoc(userRef, { name: data.name, password: data.password });
         showNotification('註冊成功');
@@ -237,6 +225,16 @@ const App = () => {
         setCurrentUser({ name: data.name, role: 'client', isAnonymous: false });
         setView('client');
       } else showNotification('名稱或密碼錯誤', 'error');
+    }
+  };
+
+  const handleForceReset = async (newPassword) => {
+    try {
+      await updateDoc(doc(db, "users", currentUser.name), { password: newPassword });
+      showNotification('密碼重設成功！請牢記新密碼');
+      setCurrentUser({ ...currentUser, mustResetPassword: false });
+    } catch (e) {
+      showNotification('重設失敗', 'error');
     }
   };
 
@@ -252,21 +250,26 @@ const App = () => {
         </div>
       )}
 
+      {/* 強制重設密碼視窗 */}
+      {currentUser?.mustResetPassword && (
+        <div className="fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl border-4 border-red-100">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><ShieldAlert size={32}/></div>
+              <h2 className="text-2xl font-black text-slate-800">安全警示：強制重設</h2>
+              <p className="text-slate-500 text-sm mt-2 font-bold">您透過救援編號登入，為確保帳號安全，<br/>請立即設定新的登入密碼。</p>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleForceReset(e.target.newPwd.value); }} className="space-y-2">
+              <InputBox label="設定新密碼"><input name="newPwd" type="password" required style={inputBaseStyle} placeholder="請輸入新密碼" /></InputBox>
+              <button type="submit" className="w-full py-4 bg-red-500 text-white font-black rounded-2xl shadow-xl hover:bg-red-600 transition-all mt-4">確認並更新密碼</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {view === 'login' && <LoginView onAuth={handleAuth} onAnonymousRequest={async (d) => {
         try {
-          const newItem = { 
-            ...d, 
-            status: 'pending', 
-            updatedAt: new Date().toISOString(), 
-            isAnonymous: true, 
-            items: { 
-              avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, 
-              halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, 
-              fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, 
-              other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } 
-            }, 
-            timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] 
-          };
+          const newItem = { ...d, status: 'pending', updatedAt: new Date().toISOString(), isAnonymous: true, items: { avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] };
           await addDoc(collection(db, "commissions"), newItem);
           showNotification('申請已送出！請記住編號：' + d.code);
         } catch(e) { showNotification(e.message, 'error'); }
@@ -285,6 +288,7 @@ const App = () => {
         <ArtistDashboard 
           commissions={commissions} 
           registeredUsers={registeredUsers}
+          artistSettings={artistSettings} // 傳入設定以供驗證
           notify={showNotification} 
           onLogout={() => { setView('login'); setCurrentUser(null); }} 
         />
@@ -310,9 +314,9 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
         </div>
 
         <div className="flex p-1.5 bg-slate-100 rounded-2xl mb-8 overflow-x-auto no-scrollbar gap-1">
-            {['login', 'register', 'anonymous_track', 'anonymous_req', 'artist'].map(tab => (
-              <button key={tab} onClick={()=>setActiveTab(tab)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap px-4 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>
-                {tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : '繪師端'}
+            {['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (
+              <button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:''})}} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap px-4 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>
+                {tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}
               </button>
             ))}
         </div>
@@ -327,6 +331,14 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
                     <InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox>
                     <InputBox label="密碼"><input required type="password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>
                 </>
+            )}
+            {activeTab === 'forgot_password' && (
+                <div className="bg-orange-50 p-4 rounded-2xl mb-4 border border-orange-100">
+                    <p className="text-xs text-orange-600 font-bold mb-4 flex items-center gap-1"><ShieldCheck size={14}/> 救援登入模式</p>
+                    <InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的註冊名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox>
+                    <InputBox label="驗證編號"><input required style={inputBaseStyle} placeholder="輸入您名下任一委託編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox>
+                    <p className="text-[10px] text-slate-400 mt-2 font-bold">* 驗證通過後需強制重設密碼</p>
+                </div>
             )}
             {activeTab === 'anonymous_track' && (
                 <>
@@ -355,8 +367,8 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
                 <InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>
             )}
 
-            <button type="submit" className={`w-full py-4 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 text-lg mt-6 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':'bg-blue-600 shadow-blue-100'}`}>
-                {activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : '進入後台'}
+            <button type="submit" className={`w-full py-4 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 text-lg mt-6 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':activeTab==='forgot_password'?'bg-orange-500 shadow-orange-100':'bg-blue-600 shadow-blue-100'}`}>
+                {activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : activeTab === 'forgot_password' ? '驗證並重設' : '進入後台'}
             </button>
         </form>
       </div>
@@ -368,6 +380,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
 const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [isNewReqOpen, setNewReqOpen] = useState(false);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
   
   const myCommissions = user.isAnonymous 
     ? allCommissions.filter(c => c.id === user.targetId)
@@ -402,6 +415,25 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
     } catch(err) { notify('發送失敗', 'error'); }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { oldPwd, newPwd } = Object.fromEntries(fd);
+
+    try {
+        // 驗證舊密碼
+        const userRef = doc(db, "users", user.name);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists() && userSnap.data().password === oldPwd) {
+            await updateDoc(userRef, { password: newPwd });
+            notify('密碼修改成功！');
+            setSettingsOpen(false);
+        } else {
+            notify('舊密碼錯誤', 'error');
+        }
+    } catch(e) { notify('修改失敗', 'error'); }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b p-4 flex justify-between items-center px-6 lg:px-10 shadow-sm sticky top-0 z-40">
@@ -409,7 +441,10 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${user.isAnonymous?'bg-emerald-500':'bg-blue-600'}`}>{user.isAnonymous?<Key size={16}/>:<User size={16}/>}</div>
             <span className="font-black text-slate-800 text-sm md:text-base">{user.name} 的空間</span>
         </div>
-        <button onClick={onLogout} className="text-slate-400 font-bold text-sm hover:text-red-500 transition-colors">登出</button>
+        <div className="flex gap-3">
+            {!user.isAnonymous && <button onClick={()=>setSettingsOpen(true)} className="text-slate-400 font-bold text-sm hover:text-blue-500 transition-colors flex items-center gap-1"><Settings size={14}/> 設定</button>}
+            <button onClick={onLogout} className="text-slate-400 font-bold text-sm hover:text-red-500 transition-colors">登出</button>
+        </div>
       </nav>
 
       <main className="max-w-5xl mx-auto p-4 md:p-8">
@@ -439,7 +474,24 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
         </div>
       </main>
 
-      {/* 委託詳情彈窗 */}
+      {/* 委託人設定 (改密碼) */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
+                <h2 className="text-xl font-black mb-6 flex items-center gap-2"><Lock size={20}/> 修改帳戶密碼</h2>
+                <form onSubmit={handleChangePassword} className="space-y-2">
+                    <InputBox label="目前舊密碼"><input name="oldPwd" type="password" required style={inputBaseStyle} /></InputBox>
+                    <InputBox label="設定新密碼"><input name="newPwd" type="password" required style={inputBaseStyle} /></InputBox>
+                    <div className="flex gap-3 mt-4">
+                        <button type="button" onClick={()=>setSettingsOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">取消</button>
+                        <button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg">確認修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* ... (其餘彈窗維持原樣) ... */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -459,14 +511,12 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
                     </InputBox>
                     <InputBox label="繪師留言"><p className="text-sm italic text-slate-600">「{selectedProject.note || '繪師尚未留下訊息。'}」</p></InputBox>
                     
-                    {/* 即時聊天框 */}
                     <ChatBox commissionId={selectedProject.id} currentUser={user} />
                 </div>
             </div>
         </div>
       )}
 
-      {/* 新增委託彈窗 */}
       {isNewReqOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl border border-white my-8">
@@ -495,12 +545,13 @@ const ClientDashboard = ({ user, allCommissions, onLogout, notify }) => {
 };
 
 // --- 3. 繪師後台 ---
-const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => {
+const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   const [activeMainTab, setActiveMainTab] = useState('commissions'); 
   const [subTab, setSubTab] = useState('all'); 
   const [searchQuery, setSearchQuery] = useState('');
   const [editItem, setEditItem] = useState(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState(null);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
 
   const filteredAll = useMemo(() => {
     return commissions.filter(c => 
@@ -514,6 +565,23 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
   const ongoingList = filteredAll.filter(c => c.status !== 'pending' && c.status !== 'done');
   
   const getSubFiltered = (list) => subTab === 'all' ? list : list.filter(c => c.type === subTab);
+
+  const handleChangeAdminPwd = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { oldPwd, newPwd } = Object.fromEntries(fd);
+
+    if (oldPwd !== artistSettings.password) {
+        notify('舊密碼錯誤', 'error');
+        return;
+    }
+
+    try {
+        await updateDoc(doc(db, "settings", "admin_config"), { password: newPwd });
+        notify('管理密碼更新成功！');
+        setSettingsOpen(false);
+    } catch(e) { notify('更新失敗', 'error'); }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -532,6 +600,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
                     onChange={e=>setSearchQuery(e.target.value)}
                 />
             </div>
+            <button onClick={()=>setSettingsOpen(true)} className="text-slate-400 font-bold text-xs hover:text-white px-3 py-2 bg-white/5 rounded-lg flex items-center gap-1"><Settings size={14}/></button>
             <button onClick={onLogout} className="text-slate-400 font-bold text-xs hover:text-white px-3 py-2 bg-white/5 rounded-lg">登出</button>
         </div>
       </nav>
@@ -570,6 +639,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
                 </div>
             )}
 
+            {/* 內容區：帳號、委託、請求列表 (維持原功能) */}
             {activeMainTab === 'accounts' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                     {registeredUsers.map(u => (
@@ -600,7 +670,24 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
         </main>
       </div>
 
-      {/* 編輯委託彈窗 (繪師用) */}
+      {/* 繪師設定彈窗 (含舊密碼驗證) */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-white">
+                <h2 className="text-xl font-black mb-6 flex items-center gap-2"><Settings size={20}/> 系統安全設定</h2>
+                <form onSubmit={handleChangeAdminPwd} className="space-y-2">
+                    <InputBox label="目前管理密碼"><input name="oldPwd" type="password" required style={inputBaseStyle} /></InputBox>
+                    <InputBox label="新管理密碼"><input name="newPwd" type="password" required style={inputBaseStyle} /></InputBox>
+                    <div className="flex gap-3 mt-4">
+                        <button type="button" onClick={()=>setSettingsOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">取消</button>
+                        <button type="submit" className="flex-1 py-3 bg-slate-900 text-white font-black rounded-xl shadow-lg">確認更新</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* 編輯委託彈窗 */}
       {editItem && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl relative border border-white my-8">
@@ -639,7 +726,6 @@ const ArtistDashboard = ({ commissions, registeredUsers, notify, onLogout }) => 
                     </div>
                     <InputBox label="留言備註"><textarea style={{...inputBaseStyle, height:'100px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
                     
-                    {/* 即時聊天框：繪師端 */}
                     <ChatBox commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} />
 
                     <div className="flex gap-4 pt-6">
