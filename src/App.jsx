@@ -1,59 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Palette, User, Lock, LayoutGrid, CheckCircle2, 
   AlertCircle, Clock, Sparkles, LogOut, Plus, 
   Edit3, Trash2, MessageCircle, ChevronRight, 
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
-  Wallet, ShieldCheck, Camera, History, FileText, Download
+  Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud
 } from 'lucide-react';
 
-// --- 模擬數據庫 (新增 image 與 timeline) ---
-const INITIAL_DATA = [
+// --- 引入 Firebase ---
+// 請確保 src 資料夾下有 firebase.js 檔案，並且已經填入正確的設定
+import { db } from './firebase'; 
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+
+// 這是備用的初始資料 (只在第一次上傳到雲端時使用)
+const MOCK_DATA = [
   {
-    id: 1,
     name: '星野',
     code: 'STAR01',
     status: 'working',
     note: '線稿精修中，附上目前的黑白草圖供確認。',
     items: {
-      avatar: { 
-        active: true, progress: 100, price: 1500, payment: 'full',
-        // 新增預覽圖 (模擬連結)
-        preview: 'https://images.unsplash.com/photo-1544511916-0148ccdeb877?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3' 
-      }, 
-      halfBody: { 
-        active: true, progress: 65, price: 3000, payment: 'deposit',
-        preview: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3'
-      },
+      avatar: { active: true, progress: 100, price: 1500, payment: 'full', preview: 'https://images.unsplash.com/photo-1544511916-0148ccdeb877?w=500&auto=format&fit=crop&q=60' }, 
+      halfBody: { active: true, progress: 65, price: 3000, payment: 'deposit', preview: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&auto=format&fit=crop&q=60' },
       fullBody: { active: false, progress: 0, price: 5000, payment: 'none', preview: '' },
     },
-    // 新增時間軸
     timeline: [
       { date: '2024-02-14', title: '線稿進度更新', desc: '半身立繪線稿已完成 65%' },
-      { date: '2024-02-12', title: '確認訂金', desc: '已收到半身立繪訂金 $1000' },
-      { date: '2024-02-10', title: '委託成立', desc: '專案建立，等待排單' },
     ],
     updatedAt: '2024-02-14'
-  },
-  {
-    id: 2,
-    name: 'Kuma',
-    code: 'BEAR99',
-    status: 'waiting',
-    note: '已確認排單，將於下個月開始繪製。',
-    items: {
-      avatar: { active: true, progress: 0, price: 1200, payment: 'deposit', preview: '' },
-      halfBody: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
-      fullBody: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
-    },
-    timeline: [
-      { date: '2024-02-10', title: '排單確認', desc: '預計 3 月份開始繪製' },
-    ],
-    updatedAt: '2024-02-10'
   }
 ];
 
-const GlobalAnnouncement = "🌊 系統升級：現在可以直接在進度卡片中查看「預覽圖」與「詳細收據」囉！";
+const GlobalAnnouncement = "🌊 系統升級：資料已連接雲端，繪師更新後您會即時看到！";
 
 const PAYMENT_STATUS = {
   none: { label: '未付款', color: 'text-slate-400', bg: 'bg-slate-100', icon: Wallet },
@@ -65,8 +43,42 @@ const PAYMENT_STATUS = {
 const App = () => {
   const [view, setView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
-  const [commissions, setCommissions] = useState(INITIAL_DATA);
+  const [commissions, setCommissions] = useState([]); // 改成空陣列，等待從雲端抓資料
   const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // 監聽雲端資料庫變化 (Real-time)
+  useEffect(() => {
+    // 建立查詢：從 'commissions' 集合抓取資料，並依照 updatedAt 排序
+    const q = query(collection(db, "commissions"), orderBy("updatedAt", "desc"));
+    
+    // 開啟即時監聽
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setCommissions(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Firebase 連線錯誤:", error);
+      showNotification("資料庫連線失敗，請檢查 firebase.js 設定", "error");
+      setLoading(false);
+    });
+
+    // 組件卸載時取消監聽
+    return () => unsubscribe();
+  }, []);
+
+  // 上傳初始資料到雲端 (僅供第一次使用)
+  const uploadInitialData = async () => {
+    try {
+      for (const item of MOCK_DATA) {
+        await addDoc(collection(db, "commissions"), item);
+      }
+      showNotification('初始資料上傳成功！');
+    } catch (e) {
+      console.error(e);
+      showNotification('上傳失敗: ' + e.message, 'error');
+    }
+  };
 
   const handleLogin = (role, data) => {
     if (role === 'artist') {
@@ -81,7 +93,7 @@ const App = () => {
         setCurrentUser(target);
         setView('client');
       } else {
-        showNotification('找不到資料', 'error');
+        showNotification('找不到資料，請確認名稱與編號', 'error');
       }
     }
   };
@@ -90,6 +102,8 @@ const App = () => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
   };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-blue-600 font-bold">資料庫連線中...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 selection:bg-sky-200 selection:text-blue-900">
@@ -100,7 +114,7 @@ const App = () => {
         </div>
       )}
 
-      {view === 'login' && <LoginView onLogin={handleLogin} />}
+      {view === 'login' && <LoginView onLogin={handleLogin} commissions={commissions} onUpload={uploadInitialData} />}
       
       {view === 'client' && (
         <ClientDashboard 
@@ -113,9 +127,8 @@ const App = () => {
       {view === 'artist' && (
         <ArtistDashboard 
           commissions={commissions} 
-          setCommissions={setCommissions} 
-          onLogout={() => setView('login')}
           notify={showNotification}
+          onLogout={() => setView('login')}
         />
       )}
     </div>
@@ -123,7 +136,7 @@ const App = () => {
 };
 
 // --- 登入介面 ---
-const LoginView = ({ onLogin }) => {
+const LoginView = ({ onLogin, commissions, onUpload }) => {
   const [activeTab, setActiveTab] = useState('client');
   const [formData, setFormData] = useState({ name: '', code: '', password: '' });
 
@@ -139,7 +152,7 @@ const LoginView = ({ onLogin }) => {
               <Palette size={36} className="text-white drop-shadow-md" />
             </div>
             <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Commission<span className="text-blue-500">Hub</span></h1>
-            <p className="text-slate-500 mt-2 font-medium">Ultimate Tracker</p>
+            <p className="text-slate-500 mt-2 font-medium">Cloud Database Connected</p>
           </div>
 
           <div className="flex p-2 mx-8 bg-slate-100/80 rounded-2xl mb-6">
@@ -160,22 +173,32 @@ const LoginView = ({ onLogin }) => {
               {activeTab === 'client' ? '查詢進度' : '進入後台'}
             </button>
           </form>
+          
+          {/* 初始化按鈕：如果資料庫是空的，顯示這個按鈕 */}
+          {commissions.length === 0 && (
+            <div className="px-8 pb-8 text-center">
+              <p className="text-xs text-slate-400 mb-2">資料庫目前是空的</p>
+              <button type="button" onClick={onUpload} className="text-xs flex items-center justify-center gap-1 mx-auto text-blue-500 hover:underline">
+                <Cloud size={12}/> 上傳測試資料 (星野)
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// --- 2. 委託人儀表板 (Client Dashboard) ---
+// --- 2. 委託人儀表板 ---
 const ClientDashboard = ({ user, data, onLogout }) => {
+  if (!data) return <div className="p-10 text-center">資料讀取錯誤或已被刪除 <button onClick={onLogout} className="underline">登出</button></div>;
+
   const activeItems = Object.entries(data.items).filter(([_, item]) => item.active);
   const [activeTab, setActiveTab] = useState(activeItems.length > 0 ? activeItems[0][0] : null);
   const [showReceipt, setShowReceipt] = useState(false);
 
   const tabLabels = { avatar: '大頭貼', halfBody: '半身插畫', fullBody: '全身立繪' };
   const tabIcons = { avatar: User, halfBody: ImageIcon, fullBody: Activity };
-
-  // 計算總金額
   const totalAmount = Object.values(data.items).reduce((acc, curr) => curr.active ? acc + curr.price : acc, 0);
 
   return (
@@ -200,16 +223,13 @@ const ClientDashboard = ({ user, data, onLogout }) => {
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        {/* 全域公告 */}
         <div className="bg-gradient-to-r from-blue-600 to-sky-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-3">
           <Sparkles size={18} />
           <p className="text-sm font-medium">{GlobalAnnouncement}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 左側：主要進度區 (佔 2/3) */}
           <div className="lg:col-span-2 space-y-6">
-             {/* Header */}
             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden">
                <div className="relative z-10">
                  <h1 className="text-3xl font-bold text-slate-800 mb-2">Hi, {data.name}</h1>
@@ -219,32 +239,25 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                <div className="absolute right-[-20px] top-[-20px] w-40 h-40 bg-blue-50 rounded-full blur-3xl opacity-50"></div>
             </div>
 
-            {/* Tabs & Content */}
             {activeItems.length > 0 ? (
               <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden min-h-[500px]">
-                {/* Tabs */}
                 <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar">
                   {activeItems.map(([key, _]) => {
                     const Icon = tabIcons[key];
-                    const isActive = activeTab === key;
                     return (
-                      <button key={key} onClick={() => setActiveTab(key)} className={`flex-1 py-4 px-6 font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap transition-all border-b-2 ${isActive ? 'text-blue-600 border-blue-600 bg-blue-50/30' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'}`}>
+                      <button key={key} onClick={() => setActiveTab(key)} className={`flex-1 py-4 px-6 font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap transition-all border-b-2 ${activeTab === key ? 'text-blue-600 border-blue-600 bg-blue-50/30' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'}`}>
                         <Icon size={18} /> {tabLabels[key]}
                       </button>
                     );
                   })}
                 </div>
-
-                {/* Content */}
                 <div className="p-8 animate-in fade-in" key={activeTab}>
                    {(() => {
                      const currentItem = data.items[activeTab];
                      const statusInfo = PAYMENT_STATUS[currentItem.payment];
                      const StatusIcon = statusInfo.icon;
-
                      return (
                        <div className="space-y-8">
-                         {/* 金額卡片 */}
                          <div className="flex flex-col sm:flex-row gap-4">
                            <div className={`flex-1 p-4 rounded-2xl border ${currentItem.payment === 'full' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
                               <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
@@ -255,11 +268,9 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                               <div className={`flex items-center gap-2 mt-1 font-bold ${statusInfo.color}`}><StatusIcon size={20}/>{statusInfo.label}</div>
                            </div>
                          </div>
-
-                         {/* 預覽圖區域 (重點優化) */}
                          <div>
                             <span className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-3">
-                              <Camera size={16} /> 當前預覽 (Preview)
+                              <Camera size={16} /> 當前預覽
                             </span>
                             <div className="aspect-video w-full bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 relative group">
                               {currentItem.preview ? (
@@ -277,8 +288,6 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                               )}
                             </div>
                          </div>
-
-                         {/* 進度條 */}
                          <div>
                            <div className="flex justify-between items-end mb-2">
                              <span className="font-bold text-slate-700">Completion</span>
@@ -294,36 +303,18 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 bg-white rounded-[2rem] border border-dashed border-slate-200">
-                 <p className="text-slate-400">尚無項目</p>
-              </div>
+              <div className="text-center py-12 bg-white rounded-[2rem] border border-dashed border-slate-200"><p className="text-slate-400">尚無項目</p></div>
             )}
           </div>
-
-          {/* 右側：時間軸與備註 (佔 1/3) */}
           <div className="space-y-6">
-            {/* 繪師備註 */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-               <div className="flex items-center gap-2 mb-4 text-blue-600">
-                  <MessageCircle size={20} />
-                  <h3 className="font-bold">Artist Note</h3>
-               </div>
-               <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-4 rounded-xl">
-                 {data.note || "暫無備註"}
-               </p>
+               <div className="flex items-center gap-2 mb-4 text-blue-600"><MessageCircle size={20} /><h3 className="font-bold">Artist Note</h3></div>
+               <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-4 rounded-xl">{data.note || "暫無備註"}</p>
             </div>
-
-            {/* 動態時光機 (Timeline) */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm max-h-[500px] overflow-y-auto custom-scrollbar">
-               <div className="flex items-center gap-2 mb-6 text-slate-800">
-                  <History size={20} />
-                  <h3 className="font-bold">Activity Log</h3>
-               </div>
-               
+               <div className="flex items-center gap-2 mb-6 text-slate-800"><History size={20} /><h3 className="font-bold">Activity Log</h3></div>
                <div className="relative pl-4 space-y-8">
-                  {/* 直線 */}
                   <div className="absolute left-[23px] top-2 bottom-2 w-[2px] bg-slate-100"></div>
-
                   {data.timeline && data.timeline.length > 0 ? data.timeline.map((event, idx) => (
                     <div key={idx} className="relative pl-8 animate-in slide-in-from-left-2 delay-100">
                        <div className="absolute left-[19px] top-1.5 w-2.5 h-2.5 bg-blue-500 rounded-full ring-4 ring-white z-10"></div>
@@ -337,8 +328,6 @@ const ClientDashboard = ({ user, data, onLogout }) => {
           </div>
         </div>
       </main>
-
-      {/* 收據 Modal */}
       {showReceipt && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
@@ -349,14 +338,8 @@ const ClientDashboard = ({ user, data, onLogout }) => {
             </div>
             <div className="p-8 space-y-6">
               <div className="flex justify-between border-b border-slate-100 pb-4">
-                 <div>
-                   <p className="text-xs text-slate-400 uppercase">Client</p>
-                   <p className="font-bold text-slate-800">{data.name}</p>
-                 </div>
-                 <div className="text-right">
-                   <p className="text-xs text-slate-400 uppercase">Date</p>
-                   <p className="font-bold text-slate-800">{data.updatedAt}</p>
-                 </div>
+                 <div><p className="text-xs text-slate-400 uppercase">Client</p><p className="font-bold text-slate-800">{data.name}</p></div>
+                 <div className="text-right"><p className="text-xs text-slate-400 uppercase">Date</p><p className="font-bold text-slate-800">{data.updatedAt}</p></div>
               </div>
               <div className="space-y-3">
                  {Object.entries(data.items).filter(([_, i]) => i.active).map(([key, i]) => (
@@ -366,10 +349,7 @@ const ClientDashboard = ({ user, data, onLogout }) => {
                    </div>
                  ))}
               </div>
-              <div className="border-t border-slate-900 pt-4 flex justify-between items-end">
-                <span className="font-bold text-slate-900">Total</span>
-                <span className="text-2xl font-bold text-slate-900">${totalAmount.toLocaleString()}</span>
-              </div>
+              <div className="border-t border-slate-900 pt-4 flex justify-between items-end"><span className="font-bold text-slate-900">Total</span><span className="text-2xl font-bold text-slate-900">${totalAmount.toLocaleString()}</span></div>
               <button className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 mt-4 hover:bg-blue-700">
                 <Download size={18} /> 下載收據 (PDF)
               </button>
@@ -381,55 +361,63 @@ const ClientDashboard = ({ user, data, onLogout }) => {
   );
 };
 
-// --- 3. 繪師後台 (Artist Dashboard) ---
-const ArtistDashboard = ({ commissions, setCommissions, onLogout, notify }) => {
+// --- 3. 繪師後台 (雲端寫入版) ---
+const ArtistDashboard = ({ commissions, notify, onLogout }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
   const openModal = (item = null) => {
     setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {
-      id: Date.now(), 
       name: '', code: '', status: 'waiting', note: '',
       items: {
         avatar: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
         halfBody: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
         fullBody: { active: false, progress: 0, price: 0, payment: 'none', preview: '' },
       },
-      timeline: [], // 初始化 timeline
+      timeline: [],
       updatedAt: new Date().toISOString().split('T')[0]
     });
     setIsModalOpen(true);
   };
 
-  const handleSave = (data) => {
-    // 自動生成 timeline log (簡易版)
-    const newTimelineEvent = {
-      date: new Date().toISOString().split('T')[0],
-      title: '系統更新',
-      desc: '委託進度或狀態已更新'
-    };
-    
-    // 如果是舊資料，把新事件加進去
-    const dataToSave = {
-      ...data,
-      timeline: [newTimelineEvent, ...(data.timeline || [])],
-      updatedAt: new Date().toISOString().split('T')[0]
-    };
+  // 儲存到 Firebase
+  const handleSave = async (data) => {
+    try {
+      const newTimelineEvent = {
+        date: new Date().toISOString().split('T')[0],
+        title: '系統更新',
+        desc: '委託進度或狀態已更新'
+      };
+      const dataToSave = {
+        ...data,
+        timeline: [newTimelineEvent, ...(data.timeline || [])],
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
 
-    if (commissions.find(c => c.id === data.id)) {
-      setCommissions(commissions.map(c => c.id === data.id ? dataToSave : c));
-      notify('資料已更新');
-    } else {
-      setCommissions([dataToSave, ...commissions]);
-      notify('新委託已建立');
+      if (data.id) {
+        // 更新現有
+        await updateDoc(doc(db, "commissions", data.id), dataToSave);
+        notify('雲端資料已更新');
+      } else {
+        // 新增
+        await addDoc(collection(db, "commissions"), dataToSave);
+        notify('新委託已上傳雲端');
+      }
+      setIsModalOpen(false);
+    } catch (e) {
+      notify('儲存失敗: ' + e.message, 'error');
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id) => {
-    if (confirm('確定要刪除嗎？')) {
-      setCommissions(commissions.filter(c => c.id !== id));
-      notify('資料已刪除');
+  // 從 Firebase 刪除
+  const handleDelete = async (id) => {
+    if (confirm('確定要從雲端刪除嗎？無法復原。')) {
+      try {
+        await deleteDoc(doc(db, "commissions", id));
+        notify('資料已刪除');
+      } catch (e) {
+        notify('刪除失敗', 'error');
+      }
     }
   };
 
@@ -437,10 +425,7 @@ const ArtistDashboard = ({ commissions, setCommissions, onLogout, notify }) => {
     <div className="min-h-screen bg-slate-50 pb-20">
       <nav className="bg-slate-900 text-white sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <LayoutGrid size={20} className="text-blue-400" />
-            <span className="font-bold">Artist Studio</span>
-          </div>
+          <div className="flex items-center gap-2"><LayoutGrid size={20} className="text-blue-400" /><span className="font-bold">Artist Studio (Cloud)</span></div>
           <button onClick={onLogout} className="text-slate-400 hover:text-white text-sm">登出</button>
         </div>
       </nav>
@@ -448,148 +433,86 @@ const ArtistDashboard = ({ commissions, setCommissions, onLogout, notify }) => {
       <main className="max-w-6xl mx-auto px-6 py-10">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold text-slate-800">委託管理</h2>
-          <button onClick={() => openModal()} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
-            <Plus size={18} /> 新增
-          </button>
+          <button onClick={() => openModal()} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all"><Plus size={18} /> 新增</button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {commissions.map(item => (
             <div key={item.id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
               <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-lg text-slate-800">{item.name}</h3>
-                  <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">#{item.code}</span>
-                </div>
+                <div><h3 className="font-bold text-lg text-slate-800">{item.name}</h3><span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">#{item.code}</span></div>
                 <StatusBadge status={item.status} mini />
               </div>
               <div className="space-y-2 mb-6">
                 {Object.entries(item.items).filter(([_, i]) => i.active).map(([key, i]) => (
                   <div key={key} className="flex justify-between text-xs items-center bg-slate-50 p-2 rounded-lg">
                     <span className="font-medium text-slate-600 capitalize">{key}</span>
-                    <div className="flex items-center gap-2">
-                       <span className={`w-1.5 h-1.5 rounded-full ${i.preview ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-                       <span className="font-bold text-blue-600">{i.progress}%</span>
-                    </div>
+                    <div className="flex items-center gap-2"><span className={`w-1.5 h-1.5 rounded-full ${i.preview ? 'bg-emerald-500' : 'bg-slate-300'}`}></span><span className="font-bold text-blue-600">{i.progress}%</span></div>
                   </div>
                 ))}
               </div>
-              <button onClick={() => openModal(item)} className="w-full py-2 text-sm font-bold text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl flex items-center justify-center gap-2 transition-colors">
-                <Edit3 size={16} /> 管理詳情
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => openModal(item)} className="flex-1 py-2 text-sm font-bold text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl flex items-center justify-center gap-2 transition-colors"><Edit3 size={16} /> 編輯</button>
+                <button onClick={() => handleDelete(item.id)} className="px-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl"><Trash2 size={18} /></button>
+              </div>
             </div>
           ))}
         </div>
       </main>
-
       {isModalOpen && <EditModal data={editingItem} onClose={() => setIsModalOpen(false)} onSave={handleSave} />}
     </div>
   );
 };
 
-// --- 組件: 編輯視窗 ---
+// --- 組件: 編輯視窗 (維持不變) ---
 const EditModal = ({ data, onClose, onSave }) => {
   const [form, setForm] = useState(data);
   const [tab, setTab] = useState('info'); 
 
   const updateItem = (key, field, value) => {
-    setForm({
-      ...form,
-      items: { ...form.items, [key]: { ...form.items[key], [field]: value } }
-    });
+    setForm({ ...form, items: { ...form.items, [key]: { ...form.items[key], [field]: value } } });
   };
-
   const toggleActive = (key) => updateItem(key, 'active', !form.items[key].active);
-
-  const tabs = [
-    { id: 'info', label: '基本' },
-    { id: 'avatar', label: '大頭' },
-    { id: 'halfBody', label: '半身' },
-    { id: 'fullBody', label: '全身' }
-  ];
+  const tabs = [{ id: 'info', label: '基本' }, { id: 'avatar', label: '大頭' }, { id: 'halfBody', label: '半身' }, { id: 'fullBody', label: '全身' }];
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-          <h3 className="font-bold text-lg text-slate-800">編輯委託</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X size={20} /></button>
-        </div>
-
-        <div className="flex p-2 bg-white border-b border-slate-100 shrink-0">
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${tab === t.id ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>{t.label}</button>
-          ))}
-        </div>
-        
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0"><h3 className="font-bold text-lg text-slate-800">編輯委託</h3><button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X size={20} /></button></div>
+        <div className="flex p-2 bg-white border-b border-slate-100 shrink-0">{tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${tab === t.id ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>{t.label}</button>))}</div>
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {tab === 'info' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="label">名稱</label><input type="text" className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-                <div><label className="label">編號</label><input type="text" className="input font-mono" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
-              </div>
-              <div>
-                <label className="label">狀態</label>
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  {['waiting', 'working', 'done'].map(s => (
-                    <button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>
-                  ))}
-                </div>
-              </div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="label">名稱</label><input type="text" className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div><div><label className="label">編號</label><input type="text" className="input font-mono" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div></div>
+              <div><label className="label">狀態</label><div className="flex bg-slate-100 p-1 rounded-xl">{['waiting', 'working', 'done'].map(s => (<button key={s} onClick={() => setForm({...form, status: s})} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${form.status === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>{s}</button>))}</div></div>
               <div><label className="label">備註</label><textarea className="input resize-none" rows="3" value={form.note} onChange={e => setForm({...form, note: e.target.value})}></textarea></div>
             </div>
           )}
-
           {['avatar', 'halfBody', 'fullBody'].includes(tab) && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <span className="font-bold text-slate-700">啟用此項目</span>
-                <button onClick={() => toggleActive(tab)} className={`w-12 h-7 rounded-full transition-colors relative ${form.items[tab].active ? 'bg-blue-500' : 'bg-slate-300'}`}>
-                  <span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${form.items[tab].active ? 'translate-x-5' : ''}`}></span>
-                </button>
-              </div>
-
+              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100"><span className="font-bold text-slate-700">啟用此項目</span><button onClick={() => toggleActive(tab)} className={`w-12 h-7 rounded-full transition-colors relative ${form.items[tab].active ? 'bg-blue-500' : 'bg-slate-300'}`}><span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${form.items[tab].active ? 'translate-x-5' : ''}`}></span></button></div>
               {form.items[tab].active && (
                 <div className="space-y-5 animate-in slide-in-from-top-2">
                    <div><label className="label">進度 ({form.items[tab].progress}%)</label><input type="range" min="0" max="100" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" value={form.items[tab].progress} onChange={e => updateItem(tab, 'progress', parseInt(e.target.value))} /></div>
-                   <div className="grid grid-cols-2 gap-4">
-                     <div><label className="label">金額</label><input type="number" className="input" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div>
-                     <div><label className="label">付款</label><select className="input" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div>
-                   </div>
-                   <div>
-                     <label className="label">預覽圖連結 (URL)</label>
-                     <input type="text" className="input text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} />
-                     <p className="text-[10px] text-slate-400 mt-1">請貼上圖片網址，例如 Imgur 或 Google Drive 公開連結</p>
-                   </div>
+                   <div className="grid grid-cols-2 gap-4"><div><label className="label">金額</label><input type="number" className="input" value={form.items[tab].price} onChange={e => updateItem(tab, 'price', parseInt(e.target.value) || 0)} /></div><div><label className="label">付款</label><select className="input" value={form.items[tab].payment} onChange={e => updateItem(tab, 'payment', e.target.value)}><option value="none">未付款</option><option value="deposit">訂金</option><option value="full">付清</option></select></div></div>
+                   <div><label className="label">預覽圖連結 (URL)</label><input type="text" className="input text-xs" placeholder="https://..." value={form.items[tab].preview || ''} onChange={e => updateItem(tab, 'preview', e.target.value)} /><p className="text-[10px] text-slate-400 mt-1">請貼上圖片網址</p></div>
                 </div>
               )}
             </div>
           )}
         </div>
-
-        <div className="p-4 border-t border-slate-100 flex gap-3 shrink-0 bg-white">
-          <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button>
-          <button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存並更新 Timeline</button>
-        </div>
+        <div className="p-4 border-t border-slate-100 flex gap-3 shrink-0 bg-white"><button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors">取消</button><button onClick={() => onSave(form)} className="flex-[2] bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20">儲存並更新</button></div>
       </div>
     </div>
   );
 };
 
-// --- Helper ---
+// --- Helper (維持不變) ---
 const StatusBadge = ({ status, mini }) => {
   const config = { waiting: { bg: 'bg-slate-100', text: 'text-slate-500', label: '排單中', icon: Clock }, working: { bg: 'bg-blue-50', text: 'text-blue-600', label: '繪製中', icon: Activity }, done: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: '已完成', icon: CheckCircle2 } };
   const { bg, text, label, icon: Icon } = config[status];
   if (mini) return <span className={`${bg} ${text} p-1.5 rounded-lg`}><Icon size={14} /></span>;
   return <span className={`${bg} ${text} rounded-full font-bold px-4 py-2 text-sm flex items-center gap-2 border border-white shadow-sm`}><Icon size={16} /> {label}</span>;
 };
-
-const styles = `
-  .label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2; }
-  .input { @apply w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; }
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-`;
-
+const styles = `.label { @apply block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2; } .input { @apply w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700; } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`;
 export default App;
