@@ -6,7 +6,7 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter
+  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type
 } from 'lucide-react';
 
 // --- Firebase 整合連線 (改回標準 NPM 引入，解決白畫面問題) ---
@@ -30,7 +30,6 @@ const firebaseConfig = {
 };
 
 // 初始化 Firebase
-// 增加 try-catch 避免重複初始化導致報錯
 let firebaseApp;
 let db;
 let storage;
@@ -173,7 +172,6 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
 
     setIsUploading(true); 
     try {
-      // 優先使用 Storage，若失敗則回退到 Base64 壓縮
       let imageUrl;
       try {
         imageUrl = await uploadImageToStorage(file);
@@ -522,10 +520,11 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   const [previewImage, setPreviewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // 新增篩選狀態
-  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done
-  const [typeFilter, setTypeFilter] = useState('all');     // all, avatar, halfBody, fullBody, other
+  // 新增篩選與排序狀態
+  const [statusFilter, setStatusFilter] = useState('all'); 
+  const [typeFilter, setTypeFilter] = useState('all');     
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState('date_desc'); // date_desc, date_asc, name_asc, name_desc
   
   // 修復：匿名查詢時，只要編號和密碼正確，就能看到所有符合條件的委託 (不再只是一筆)
   // 如果是匿名用戶，user.code 是登入時輸入的編號
@@ -533,9 +532,9 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
     ? allCommissions.filter(c => c.code === user.code)
     : allCommissions.filter(c => c.userName === user.name);
 
-  // 篩選邏輯
+  // 篩選與排序邏輯
   const filteredCommissions = useMemo(() => {
-    return myCommissions.filter(c => {
+    let result = myCommissions.filter(c => {
       // 搜尋過濾
       const searchMatch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           c.code.toLowerCase().includes(searchQuery.toLowerCase());
@@ -546,20 +545,40 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
       if (statusFilter === 'pending') statusMatch = c.status === 'pending';
       else if (statusFilter === 'ongoing') statusMatch = c.status === 'waiting' || c.status === 'working';
       else if (statusFilter === 'done') statusMatch = c.status === 'done';
-      if (!statusMatch) return false;
 
       // 類型過濾
       let typeMatch = true;
       if (typeFilter !== 'all') typeMatch = c.type === typeFilter;
       
-      return typeMatch;
+      return statusMatch && typeMatch;
     });
-  }, [myCommissions, statusFilter, typeFilter, searchQuery]);
+
+    // 排序
+    result.sort((a, b) => {
+        if (sortOrder === 'date_desc') return new Date(b.updatedAt) - new Date(a.updatedAt);
+        if (sortOrder === 'date_asc') return new Date(a.updatedAt) - new Date(b.updatedAt);
+        if (sortOrder === 'name_asc') return a.name.localeCompare(b.name);
+        if (sortOrder === 'name_desc') return b.name.localeCompare(a.name);
+        return 0;
+    });
+
+    return result;
+  }, [myCommissions, statusFilter, typeFilter, searchQuery, sortOrder]);
 
   const handleNewRequest = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const data = Object.fromEntries(fd); try { const newItem = { userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', paymentType: data.paymentType, updatedAt: new Date().toISOString(), referenceImages: newRequestImgs, items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }] }; await addDoc(collection(db, "commissions"), newItem); notify('委託申請已送出！'); setNewReqOpen(false); setNewRequestImgs([]); } catch(err) { notify('發送失敗', 'error'); } };
   const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { let url; try { url = await uploadImageToStorage(file); } catch { url = await compressImage(file); } newImages.push(url); } catch (error) { alert("圖片處理失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
   const handleChangePassword = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd } = Object.fromEntries(fd); try { const userRef = doc(db, "users", user.name); const userSnap = await getDoc(userRef); if (userSnap.exists() && userSnap.data().password === oldPwd) { await updateDoc(userRef, { password: newPwd }); notify('密碼修改成功！'); setSettingsOpen(false); } else notify('舊密碼錯誤', 'error'); } catch(e) { notify('修改失敗', 'error'); } };
   const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { let compressed; try { compressed = await uploadImageToStorage(file); } catch { compressed = await compressImage(file); } await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: compressed }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: compressed })); } catch (err) { notify('上傳失敗', 'error'); } };
+
+  const toggleSort = () => {
+      const nextSort = {
+          'date_desc': 'date_asc',
+          'date_asc': 'name_asc',
+          'name_asc': 'name_desc',
+          'name_desc': 'date_desc'
+      };
+      setSortOrder(nextSort[sortOrder]);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -577,15 +596,21 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
 
             {/* 新增：篩選器區域 */}
             <div className="mb-6 space-y-3">
-              {/* 搜尋框 */}
-              <div className="relative">
-                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16}/>
-                 <input 
-                    placeholder="搜尋委託名稱或編號..." 
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                 />
+              {/* 搜尋框與排序 */}
+              <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 text-slate-400" size={16}/>
+                    <input 
+                        placeholder="搜尋名稱或編號..." 
+                        className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1">
+                      {sortOrder.includes('date') ? <Calendar size={16}/> : <Type size={16}/>}
+                      {sortOrder.includes('asc') ? <ArrowLeft className="rotate-90" size={12}/> : <ArrowLeft className="-rotate-90" size={12}/>}
+                  </button>
               </div>
 
               {/* 狀態分類 (最上級) */}
@@ -684,8 +709,54 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
 const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   // ... (State logic same as before) ...
   const [activeMainTab, setActiveMainTab] = useState('commissions'); const [subTab, setSubTab] = useState('all'); const [searchQuery, setSearchQuery] = useState(''); const [editItem, setEditItem] = useState(null); const [selectedUserDetail, setSelectedUserDetail] = useState(null); const [isSettingsOpen, setSettingsOpen] = useState(false); const [previewImage, setPreviewImage] = useState(null);
-  const filteredAll = useMemo(() => { return commissions.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.code.toLowerCase().includes(searchQuery.toLowerCase()) || (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))); }, [commissions, searchQuery]);
-  const requestsList = filteredAll.filter(c => c.status === 'pending'); const ongoingList = filteredAll.filter(c => c.status !== 'pending' && c.status !== 'done'); const getSubFiltered = (list) => subTab === 'all' ? list : list.filter(c => c.type === subTab);
+  
+  // 新增：後台的排序與狀態過濾
+  const [sortOrder, setSortOrder] = useState('date_desc'); 
+  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done (用於委託類 tab)
+
+  const filteredAll = useMemo(() => { 
+      let result = commissions.filter(c => 
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+
+      // 排序
+      result.sort((a, b) => {
+        if (sortOrder === 'date_desc') return new Date(b.updatedAt) - new Date(a.updatedAt);
+        if (sortOrder === 'date_asc') return new Date(a.updatedAt) - new Date(b.updatedAt);
+        if (sortOrder === 'name_asc') return a.name.localeCompare(b.name);
+        if (sortOrder === 'name_desc') return b.name.localeCompare(a.name);
+        return 0;
+      });
+
+      return result;
+  }, [commissions, searchQuery, sortOrder]);
+
+  const requestsList = filteredAll.filter(c => c.status === 'pending');
+  // 修改：委託類現在包含 done，並支援 statusFilter
+  const commissionsList = filteredAll.filter(c => c.status !== 'pending');
+  
+  const getDisplayList = () => {
+      let list = activeMainTab === 'commissions' ? commissionsList : requestsList;
+      
+      // 狀態二次過濾 (僅在委託類 tab 有效)
+      if (activeMainTab === 'commissions' && statusFilter !== 'all') {
+          if (statusFilter === 'ongoing') list = list.filter(c => c.status === 'waiting' || c.status === 'working');
+          else list = list.filter(c => c.status === statusFilter);
+      }
+
+      // 類型過濾
+      if (subTab !== 'all') list = list.filter(c => c.type === subTab);
+      
+      return list;
+  };
+
+  const toggleSort = () => {
+    const nextSort = { 'date_desc': 'date_asc', 'date_asc': 'name_asc', 'name_asc': 'name_desc', 'name_desc': 'date_desc' };
+    setSortOrder(nextSort[sortOrder]);
+  };
+
   const handleUpdateSettings = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd, paymentInfo } = Object.fromEntries(fd); if (oldPwd && oldPwd !== artistSettings.password) { notify('舊密碼錯誤', 'error'); return; } const updateData = { paymentInfo }; if(newPwd) updateData.password = newPwd; try { await updateDoc(doc(db, "settings", "admin_config"), updateData); notify('設定更新成功！'); setSettingsOpen(false); } catch(e) { notify('更新失敗', 'error'); } };
 
   return (
@@ -697,7 +768,52 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
         <aside className="w-64 bg-white border-r p-6 space-y-2 hidden lg:flex flex-col shrink-0"><NavButtons activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} requestsCount={requestsList.length} /></aside>
         <main className="flex-1 p-3 lg:p-8 overflow-y-auto custom-scrollbar">
             <div className="lg:hidden mb-4 overflow-x-auto pb-2 no-scrollbar"><div className="flex gap-2 min-w-max"><NavButtons activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} requestsCount={requestsList.length} mobile /></div></div>
-            {activeMainTab === 'messages' ? (<Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />) : (<>{activeMainTab !== 'accounts' && (<div className="flex gap-2 mb-6 bg-white p-1.5 rounded-xl border w-fit shadow-sm overflow-x-auto max-w-full">{['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (<button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>{t === 'all' ? '全部' : t}</button>))}</div>)}{activeMainTab === 'accounts' && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">{registeredUsers.map(u => (<div key={u.id} onClick={()=>setSelectedUserDetail(u)} className="bg-white p-5 rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex items-center gap-4"><div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><User size={20}/></div><div><h3 className="font-black text-base">{u.name}</h3><span className="text-[10px] font-bold text-slate-300">會員帳號</span></div><ChevronRight className="ml-auto text-slate-200" size={18}/></div>))}</div>)}{(activeMainTab === 'commissions' || activeMainTab === 'requests') && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">{getSubFiltered(activeMainTab === 'commissions' ? ongoingList : requestsList).map(c => (<div key={c.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative"><div className="flex justify-between items-start mb-4"><div><h3 className="font-black text-lg">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div><div className="flex flex-col items-end gap-1"><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white':'bg-blue-50 text-blue-500'}`}>{c.status}</div>{c.paymentType === 'free' && <span className="text-[9px] font-black text-pink-400 bg-pink-50 px-2 py-0.5 rounded">無償</span>}</div></div><div className="text-[10px] font-black text-slate-400 uppercase mb-4 bg-slate-50 p-2 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div><button onClick={()=>setEditItem(c)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button></div>))}</div>)}</>)}
+            {activeMainTab === 'messages' ? (<Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />) : (<>
+                {activeMainTab !== 'accounts' && (
+                    <div className="space-y-4 mb-8">
+                         {/* 排序按鈕 */}
+                         <div className="flex justify-end">
+                            <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">
+                                {sortOrder.includes('date') ? <Calendar size={14}/> : <Type size={14}/>}
+                                {sortOrder.includes('asc') ? '升冪' : '降冪'}
+                            </button>
+                         </div>
+
+                         {/* 狀態過濾 (僅委託類) */}
+                         {activeMainTab === 'commissions' && (
+                            <div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1 w-fit">
+                                {['all', 'ongoing', 'done'].map(status => (
+                                    <button key={status} onClick={() => setStatusFilter(status)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>
+                                        {status === 'all' ? '全部狀態' : status === 'ongoing' ? '進行中' : '已完成'}
+                                    </button>
+                                ))}
+                            </div>
+                         )}
+                         
+                         {/* 類型過濾 */}
+                         <div className="flex gap-2 bg-white p-1.5 rounded-xl border w-fit shadow-sm overflow-x-auto max-w-full">
+                            {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
+                                <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>{t === 'all' ? '所有類型' : t}</button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {activeMainTab === 'accounts' && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">{registeredUsers.map(u => (<div key={u.id} onClick={()=>setSelectedUserDetail(u)} className="bg-white p-5 rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex items-center gap-4"><div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><User size={20}/></div><div><h3 className="font-black text-base">{u.name}</h3><span className="text-[10px] font-bold text-slate-300">會員帳號</span></div><ChevronRight className="ml-auto text-slate-200" size={18}/></div>))}</div>)}
+                
+                {(activeMainTab === 'commissions' || activeMainTab === 'requests') && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+                        {getDisplayList().map(c => (
+                            <div key={c.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative">
+                                <div className="flex justify-between items-start mb-4"><div><h3 className="font-black text-lg">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div><div className="flex flex-col items-end gap-1"><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white':'bg-blue-50 text-blue-500'}`}>{c.status}</div>{c.paymentType === 'free' && <span className="text-[9px] font-black text-pink-400 bg-pink-50 px-2 py-0.5 rounded">無償</span>}</div></div><div className="text-[10px] font-black text-slate-400 uppercase mb-4 bg-slate-50 p-2 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div><button onClick={()=>setEditItem(c)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button>
+                            </div>
+                        ))}
+                        {getDisplayList().length === 0 && (
+                            <div className="col-span-full text-center p-10 text-slate-400 text-xs font-bold border-2 border-dashed border-slate-200 rounded-2xl">沒有符合條件的資料</div>
+                        )}
+                    </div>
+                )}
+            </>)}
         </main>
       </div>
       {/* 繪師設定彈窗 (含匯款資訊) */}
