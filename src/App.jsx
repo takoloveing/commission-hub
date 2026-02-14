@@ -6,7 +6,8 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type, Ban
+  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type, Ban,
+  BarChart3, Copy
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -73,6 +74,7 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
+        // 使用 JPEG 0.6 壓縮
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         resolve(dataUrl);
       };
@@ -150,7 +152,7 @@ const getStatusLabel = (status) => {
 };
 
 // --- 核心聊天室組件 ---
-const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) => { 
+const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80", status }) => { 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false); 
@@ -259,12 +261,18 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
           )}
           <div ref={messagesEndRef} />
         </div>
-        <div className="p-2 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
-          <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
-          <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={18} /></button>
-          <div className="flex-1 relative"><input className="w-full bg-slate-100 border-none rounded-xl pl-3 pr-3 py-2 text-xs md:text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} /></div>
-          <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" disabled={!inputText.trim() || isUploading}><Send size={18} /></button>
-        </div>
+        {status === 'declined' ? (
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-center text-slate-400 text-xs font-bold gap-2">
+                <Ban size={16} /> 🚫 此委託已婉拒，討論功能關閉
+            </div>
+        ) : (
+            <div className="p-2 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
+              <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+              <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={18} /></button>
+              <div className="flex-1 relative"><input className="w-full bg-slate-100 border-none rounded-xl pl-3 pr-3 py-2 text-xs md:text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} /></div>
+              <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" disabled={!inputText.trim() || isUploading}><Send size={18} /></button>
+            </div>
+        )}
     </div>
   );
 };
@@ -316,7 +324,7 @@ const Messenger = ({ commissions, currentUser }) => {
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden relative">
-                    <ChatRoom commissionId={selectedCommId} currentUser={currentUser} heightClass="h-full border-none rounded-none" />
+                    <ChatRoom commissionId={selectedCommId} currentUser={currentUser} heightClass="h-full border-none rounded-none" status={selectedCommission.status} />
                 </div>
             </>
         ) : (
@@ -328,6 +336,45 @@ const Messenger = ({ commissions, currentUser }) => {
       </div>
     </div>
   );
+};
+
+// --- 新增：繪師數據儀表板組件 ---
+const ArtistStats = ({ commissions }) => {
+    const stats = useMemo(() => {
+        const pending = commissions.filter(c => c.status === 'pending').length;
+        const working = commissions.filter(c => ['waiting', 'working'].includes(c.status)).length;
+        const done = commissions.filter(c => c.status === 'done').length;
+        // 計算總收益 (僅計算非婉拒且非待審核的案件)
+        const earnings = commissions
+            .filter(c => c.status !== 'declined' && c.status !== 'pending' && c.paymentType !== 'free')
+            .reduce((acc, curr) => acc + (parseInt(curr.items[curr.type]?.price) || 0), 0);
+        return { pending, working, done, earnings };
+    }, [commissions]);
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="w-10 h-10 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mb-2"><FileQuestion size={20}/></div>
+                <span className="text-2xl font-black text-slate-800">{stats.pending}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">待審核</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-2"><Activity size={20}/></div>
+                <span className="text-2xl font-black text-slate-800">{stats.working}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">進行中</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2"><CheckCircle2 size={20}/></div>
+                <span className="text-2xl font-black text-slate-800">{stats.done}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">已完成</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-2"><DollarSign size={20}/></div>
+                <span className="text-xl md:text-2xl font-black text-slate-800">${stats.earnings.toLocaleString()}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">預估收益</span>
+            </div>
+        </div>
+    );
 };
 
 // --- 主應用程式 ---
@@ -660,6 +707,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                    <h2 className="text-xl md:text-3xl font-black">委託詳情 - #{selectedProject.code}</h2>
                    {selectedProject.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 px-3 py-1 rounded-lg text-xs font-black">🎁 無償</span>}
                 </div>
+                {/* ... (其餘詳情內容維持原樣) ... */}
                 <div className="space-y-4 md:space-y-6">
                     <div className="bg-slate-50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200">
                         <h3 className="text-xs md:text-sm font-black text-slate-700 mb-3 flex items-center gap-2"><Banknote size={16}/> 匯款資訊</h3>
@@ -671,7 +719,10 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                     </div>
                     {(selectedProject.referenceImages?.length > 0 || selectedProject.referenceImage) && (<InputBox label="委託參考圖集"><div className="grid grid-cols-3 sm:grid-cols-4 gap-2">{(selectedProject.referenceImages || [selectedProject.referenceImage]).map((img, idx) => (<img key={idx} src={img} className="w-full aspect-square object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100 shadow-sm" onClick={() => setPreviewImage(img)} alt={`Ref ${idx}`} />))}</div></InputBox>)}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"><InputBox label="目前進度"><div className="flex items-center gap-4"><div className="flex-1 h-2 md:h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{width: `${selectedProject.items[selectedProject.type]?.progress || 0}%`}}></div></div><span className="font-black text-blue-600 text-sm md:text-base">{selectedProject.items[selectedProject.type]?.progress || 0}%</span></div></InputBox><InputBox label="委託金額"><div className="font-black text-xl md:text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div></InputBox></div>
-                    <InputBox label="專案討論 (Chat)"><ChatRoom commissionId={selectedProject.id} currentUser={user} /></InputBox>
+                    {/* 這裡加入判斷，若 declined 就不顯示 InputBox */}
+                    {selectedProject.status !== 'declined' && (
+                        <InputBox label="專案討論 (Chat)"><ChatRoom commissionId={selectedProject.id} currentUser={user} status={selectedProject.status} /></InputBox>
+                    )}
                 </div>
             </div>
         </div>
@@ -684,14 +735,14 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   );
 };
 
-// --- 3. 繪師後台 ---
+// --- 3. 繪師後台 (新增匯款資訊設定 & 查看證明) ---
 const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   // ... (State logic same as before) ...
   const [activeMainTab, setActiveMainTab] = useState('commissions'); const [subTab, setSubTab] = useState('all'); const [searchQuery, setSearchQuery] = useState(''); const [editItem, setEditItem] = useState(null); const [selectedUserDetail, setSelectedUserDetail] = useState(null); const [isSettingsOpen, setSettingsOpen] = useState(false); const [previewImage, setPreviewImage] = useState(null);
   
-  // 新增：排序與狀態過濾
+  // 新增：後台的排序與狀態過濾
   const [sortOrder, setSortOrder] = useState('date_desc'); 
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done (用於委託類 tab)
 
   const filteredAll = useMemo(() => { 
       let result = commissions.filter(c => 
@@ -713,7 +764,8 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
   }, [commissions, searchQuery, sortOrder]);
 
   const requestsList = filteredAll.filter(c => c.status === 'pending');
-  const commissionsList = filteredAll.filter(c => c.status !== 'pending'); // 包含進行中與已完成/婉拒
+  // 修改：委託類現在包含 done，並支援 statusFilter
+  const commissionsList = filteredAll.filter(c => c.status !== 'pending');
   
   const getDisplayList = () => {
       let list = activeMainTab === 'commissions' ? commissionsList : requestsList;
@@ -724,7 +776,9 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
           else list = list.filter(c => c.status === statusFilter);
       }
 
+      // 類型過濾
       if (subTab !== 'all') list = list.filter(c => c.type === subTab);
+      
       return list;
   };
 
@@ -747,12 +801,15 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             {activeMainTab === 'messages' ? (<Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />) : (<>
                 {activeMainTab !== 'accounts' && (
                     <div className="space-y-4 mb-8">
+                         {/* 排序按鈕 */}
                          <div className="flex justify-end">
                             <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">
                                 {sortOrder.includes('date') ? <Calendar size={14}/> : <Type size={14}/>}
                                 {sortOrder.includes('asc') ? '升冪' : '降冪'}
                             </button>
                          </div>
+
+                         {/* 狀態過濾 (僅委託類) */}
                          {activeMainTab === 'commissions' && (
                             <div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1 w-fit">
                                 {['all', 'ongoing', 'done', 'declined'].map(status => (
@@ -762,6 +819,8 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                                 ))}
                             </div>
                          )}
+                         
+                         {/* 類型過濾 */}
                          <div className="flex gap-2 bg-white p-1.5 rounded-xl border w-fit shadow-sm overflow-x-auto max-w-full">
                             {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
                                 <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>{t === 'all' ? '所有類型' : t}</button>
@@ -820,7 +879,10 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                     <div className="grid grid-cols-2 gap-3"><InputBox label="編號"><input style={inputBaseStyle} value={editItem.code} onChange={e=>setEditItem({...editItem, code: e.target.value})} /></InputBox><InputBox label="狀態"><select style={inputBaseStyle} value={editItem.status} onChange={e=>setEditItem({...editItem, status: e.target.value})}><option value="pending">待核准</option><option value="waiting">排單中</option><option value="working">進行中</option><option value="done">已完成</option><option value="declined">已婉拒</option></select></InputBox></div>
                     <div className="grid grid-cols-2 gap-3"><InputBox label="進度 %"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.progress || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].progress = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox><InputBox label="金額 $"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.price || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].price = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox></div>
                     <InputBox label="備註"><textarea style={{...inputBaseStyle, height:'80px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
-                    <InputBox label="討論"><ChatRoom commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} heightClass="h-48" /></InputBox>
+                    {/* 若狀態為 declined，隱藏聊天室 */}
+                    {editItem.status !== 'declined' && (
+                        <InputBox label="討論"><ChatRoom commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} heightClass="h-48" status={editItem.status} /></InputBox>
+                    )}
                     <div className="flex gap-3 pt-4">
                         <button type="button" onClick={async ()=>{ 
                             if(confirm('確定要婉拒此委託嗎？(委託人將會看到婉拒狀態)')){ 
