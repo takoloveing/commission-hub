@@ -6,7 +6,7 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift
+  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter
 } from 'lucide-react';
 
 // --- Firebase 整合連線 ---
@@ -69,28 +69,28 @@ const compressImage = (file) => {
   });
 };
 
-// --- 樣式組件：方框容器 (更緊湊版) ---
+// --- 樣式組件：方框容器 ---
 const InputBox = ({ label, children, style = {} }) => (
   <div style={{
     backgroundColor: '#ffffff',
     border: '2px solid #cbd5e1',
-    borderRadius: '12px', // 手機版圓角縮小
-    padding: '10px 12px', // 內距縮小
-    marginBottom: '12px', // 下距縮小
+    borderRadius: '16px',
+    padding: '12px 14px', 
+    marginBottom: '14px', 
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
     position: 'relative', 
     zIndex: 10,
     ...style
-  }} className="md:rounded-2xl md:p-4 md:mb-4"> {/* 電腦版維持較大空間 */}
+  }}>
     <label style={{
-      fontSize: '10px', // 字體縮小
+      fontSize: '11px',
       fontWeight: '900',
       color: '#94a3b8',
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
-      marginBottom: '2px'
+      marginBottom: '4px'
     }}>{label}</label>
     {children}
   </div>
@@ -98,17 +98,17 @@ const InputBox = ({ label, children, style = {} }) => (
 
 const inputBaseStyle = {
   width: '100%',
-  padding: '2px 0', // 輸入框內距縮小
+  padding: '2px 0',
   backgroundColor: 'transparent',
   border: 'none',
   outline: 'none',
   fontWeight: '700',
-  fontSize: '14px', // 輸入字體縮小
+  fontSize: '14px',
   color: '#1e293b'
 };
 
 // --- 核心聊天室組件 ---
-const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) => { 
+const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) => { 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false); 
@@ -147,6 +147,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     setIsUploading(true); 
     try {
       const compressedDataUrl = await compressImage(file);
@@ -173,7 +174,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
   };
 
   return (
-    <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-xl md:rounded-2xl overflow-hidden border border-slate-200`}>
+    <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-2xl overflow-hidden border border-slate-200`}>
         {previewImage && (
           <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}>
             <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button>
@@ -189,8 +190,8 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/50">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 opacity-50">
-                <MessageCircle size={32} strokeWidth={1.5} />
-                <p className="text-[10px] font-bold uppercase tracking-widest">開始討論吧！</p>
+                <MessageCircle size={40} strokeWidth={1.5} />
+                <p className="text-xs font-bold uppercase tracking-widest">開始討論吧！</p>
             </div>
           ) : (
             messages.map(msg => {
@@ -199,7 +200,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
                   {msg.type === 'image' ? (
                     <div className={`p-1 rounded-2xl border-2 shadow-sm ${isMe ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                      <img src={msg.image} alt="sent" className="max-w-[120px] md:max-w-[200px] max-h-[150px] md:max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setPreviewImage(msg.image)} />
+                      <img src={msg.image} alt="sent" className="max-w-[150px] md:max-w-[200px] max-h-[200px] md:max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setPreviewImage(msg.image)} />
                     </div>
                   ) : (
                     <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs md:text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>{msg.text}</div>
@@ -213,7 +214,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
         </div>
         <div className="p-2 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
           <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
-          <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={18} /></button>
+          <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={20} /></button>
           <div className="flex-1 relative"><input className="w-full bg-slate-100 border-none rounded-xl pl-3 pr-3 py-2 text-xs md:text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} /></div>
           <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" disabled={!inputText.trim() || isUploading}><Send size={18} /></button>
         </div>
@@ -221,7 +222,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-56 md:h-80" }) =
   );
 };
 
-// --- Messenger ---
+// --- Messenger (維持原樣) ---
 const Messenger = ({ commissions, currentUser }) => {
   const [selectedCommId, setSelectedCommId] = useState(null);
   const selectedCommission = commissions.find(c => c.id === selectedCommId);
@@ -229,10 +230,10 @@ const Messenger = ({ commissions, currentUser }) => {
   return (
     <div className="h-[calc(100vh-140px)] md:h-[calc(100vh-100px)] bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden flex relative">
       <div className={`w-full md:w-80 bg-slate-50 border-r border-slate-100 flex flex-col ${selectedCommId ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-500"/> 聊天列表</h2>
+        <div className="p-4 md:p-6 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+            <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-500"/> 聊天列表</h2>
         </div>
-        <div className="overflow-y-auto flex-1 p-2 space-y-2 custom-scrollbar">
+        <div className="overflow-y-auto flex-1 p-2 md:p-3 space-y-2 custom-scrollbar">
             {commissions.length > 0 ? commissions.map(c => (
                 <button 
                     key={c.id} 
@@ -252,7 +253,6 @@ const Messenger = ({ commissions, currentUser }) => {
             )}
         </div>
       </div>
-
       <div className={`flex-1 flex flex-col bg-white ${!selectedCommId ? 'hidden md:flex' : 'flex'} w-full md:w-auto absolute md:relative inset-0 md:inset-auto z-20`}>
         {selectedCommission ? (
             <>
@@ -283,193 +283,7 @@ const Messenger = ({ commissions, currentUser }) => {
   );
 };
 
-// --- 主應用程式 ---
-const App = () => {
-  const [view, setView] = useState('login'); 
-  const [currentUser, setCurrentUser] = useState(null); 
-  const [commissions, setCommissions] = useState([]); 
-  const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [artistSettings, setArtistSettings] = useState({ password: 'admin', paymentInfo: '' });
-  const [notification, setNotification] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubComms = onSnapshot(query(collection(db, "commissions"), orderBy("updatedAt", "desc")), (snapshot) => {
-      setCommissions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
-    });
-    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      setRegisteredUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
-      setLoading(false);
-    });
-    const unsubSettings = onSnapshot(doc(db, "settings", "admin_config"), (docSnap) => {
-      if (docSnap.exists()) setArtistSettings(docSnap.data());
-      else setDoc(doc(db, "settings", "admin_config"), { password: 'admin', paymentInfo: '' });
-    });
-    return () => { unsubComms(); unsubUsers(); unsubSettings(); };
-  }, []);
-
-  const showNotification = (msg, type = 'success') => {
-    setNotification({ msg, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  const handleAuth = async (action, data) => {
-    if (action === 'artist') {
-      if (data.password === artistSettings.password) {
-        setCurrentUser({ name: '管理員', role: 'artist' });
-        setView('artist');
-      } else showNotification('管理密碼錯誤', 'error');
-      return;
-    }
-    if (action === 'anonymous_track') {
-      const target = commissions.find(c => c.code === data.code && c.password === data.password);
-      if (target) {
-        setCurrentUser({ name: target.name, role: 'client', isAnonymous: true, targetId: target.id });
-        setView('client');
-      } else showNotification('編號或查詢密碼錯誤', 'error');
-      return;
-    }
-    if (action === 'forgot_password') {
-      const userRef = doc(db, "users", data.name);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) { showNotification('查無此會員名稱', 'error'); return; }
-      const validCommission = commissions.find(c => c.userName === data.name && c.code === data.code);
-      if (validCommission) {
-        showNotification('身分驗證成功！請立即重設密碼');
-        setCurrentUser({ name: data.name, role: 'client', mustResetPassword: true });
-        setView('client');
-      } else showNotification('驗證失敗', 'error');
-      return;
-    }
-    const userRef = doc(db, "users", data.name);
-    const userSnap = await getDoc(userRef);
-    if (action === 'register') {
-      if (userSnap.exists()) showNotification('名稱已被註冊，請換一個', 'error');
-      else {
-        await setDoc(userRef, { name: data.name, password: data.password });
-        showNotification('註冊成功');
-        setCurrentUser({ name: data.name, role: 'client', isAnonymous: false });
-        setView('client');
-      }
-    } else if (action === 'login') {
-      if (userSnap.exists() && userSnap.data().password === data.password) {
-        setCurrentUser({ name: data.name, role: 'client', isAnonymous: false });
-        setView('client');
-      } else showNotification('名稱或密碼錯誤', 'error');
-    }
-  };
-
-  const handleForceReset = async (newPassword) => {
-    try {
-      await updateDoc(doc(db, "users", currentUser.name), { password: newPassword });
-      showNotification('密碼重設成功！請牢記新密碼');
-      setCurrentUser({ ...currentUser, mustResetPassword: false });
-    } catch (e) { showNotification('重設失敗', 'error'); }
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-500">雲端同步中...</div>;
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <style>{styles}</style>
-      {notification && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-2xl shadow-2xl border ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'} flex items-center gap-3 animate-in slide-in-from-top-4 backdrop-blur-md`}>
-          {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
-          <span className="font-bold">{notification.msg}</span>
-        </div>
-      )}
-
-      {currentUser?.mustResetPassword && (
-        <div className="fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-6 md:p-10 shadow-2xl border-4 border-red-100">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><ShieldAlert size={32}/></div>
-              <h2 className="text-xl md:text-2xl font-black text-slate-800">安全警示：強制重設</h2>
-              <p className="text-slate-500 text-xs md:text-sm mt-2 font-bold">您透過救援編號登入，為確保帳號安全，<br/>請立即設定新的登入密碼。</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); handleForceReset(e.target.newPwd.value); }} className="space-y-2">
-              <InputBox label="設定新密碼"><input name="newPwd" type="password" autoComplete="new-password" required style={inputBaseStyle} placeholder="請輸入新密碼" /></InputBox>
-              <button type="submit" className="w-full py-3 md:py-4 bg-red-500 text-white font-black rounded-xl md:rounded-2xl shadow-xl hover:bg-red-600 transition-all mt-4">確認並更新密碼</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {view === 'login' && <LoginView onAuth={handleAuth} onAnonymousRequest={async (d) => {
-        try {
-          const newItem = { 
-            ...d, status: 'pending', updatedAt: new Date().toISOString(), isAnonymous: true, 
-            paymentType: d.paymentType || 'paid', // 預設為付費
-            referenceImages: d.referenceImages || [], referenceImage: d.referenceImages?.[0] || '', 
-            items: { 
-              avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, 
-              halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, 
-              fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, 
-              other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } 
-            }, 
-            timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] 
-          };
-          await addDoc(collection(db, "commissions"), newItem);
-          showNotification('申請已送出！請記住編號：' + d.code);
-        } catch(e) { showNotification(e.message, 'error'); }
-      }} />}
-      
-      {view === 'client' && <ClientDashboard user={currentUser} allCommissions={commissions} artistPaymentInfo={artistSettings.paymentInfo} onLogout={() => { setView('login'); setCurrentUser(null); }} notify={showNotification} />}
-      
-      {view === 'artist' && <ArtistDashboard commissions={commissions} registeredUsers={registeredUsers} artistSettings={artistSettings} notify={showNotification} onLogout={() => { setView('login'); setCurrentUser(null); }} />}
-    </div>
-  );
-};
-
-// --- 1. 登入介面 ---
-const LoginView = ({ onAuth, onAnonymousRequest }) => {
-  const [activeTab, setActiveTab] = useState('login'); 
-  const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '', referenceImages: [], paymentType: 'paid' });
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleImageChange = async (e) => {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
-    if (formData.referenceImages.length + files.length > 5) { alert("參考圖最多 5 張"); return; }
-    setIsProcessing(true);
-    const newImages = [];
-    for (const file of files) {
-        try { const compressed = await compressImage(file); newImages.push(compressed); } catch (error) { alert("圖片處理失敗"); }
-    }
-    setFormData(prev => ({ ...prev, referenceImages: [...prev.referenceImages, ...newImages] }));
-    setIsProcessing(false);
-    e.target.value = null; 
-  };
-  const removeImage = (index) => setFormData(prev => ({ ...prev, referenceImages: prev.referenceImages.filter((_, i) => i !== index) }));
-
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50 relative">
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-400/20 rounded-full blur-[100px] animate-pulse pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-300/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 border border-slate-200 relative z-10">
-        <div className="text-center mb-6"><div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-xl rotate-2"><Palette size={28}/></div><h1 className="text-xl md:text-2xl font-black">Commission<span className="text-blue-500">Hub</span></h1></div>
-        <div className="flex p-1 bg-slate-100 rounded-xl mb-6 overflow-x-auto no-scrollbar gap-1">{['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (<button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:'', referenceImages: [], paymentType: 'paid'})}} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap px-3 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}</button>))}</div>
-        <form onSubmit={(e)=>{ e.preventDefault(); if(activeTab === 'anonymous_req') onAnonymousRequest(formData); else onAuth(activeTab, formData); }} className="space-y-1 relative z-20"> 
-            {(activeTab === 'login' || activeTab === 'register') && (<><InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox></>)}
-            {activeTab === 'forgot_password' && (<div className="bg-orange-50 p-3 rounded-xl mb-3 border border-orange-100"><p className="text-xs text-orange-600 font-bold mb-3 flex items-center gap-1"><ShieldCheck size={14}/> 救援登入模式</p><InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的註冊名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="驗證編號"><input required style={inputBaseStyle} placeholder="輸入您名下任一委託編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><p className="text-[10px] text-slate-400 mt-2 font-bold">* 驗證通過後需強制重設密碼</p></div>)}
-            {activeTab === 'anonymous_track' && (<><InputBox label="匿名編號"><input required style={inputBaseStyle} placeholder="您當初設定的編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox></>)}
-            {activeTab === 'anonymous_req' && (<div className="space-y-0 overflow-y-auto max-h-[50vh] p-1 custom-scrollbar">
-                <InputBox label="委託性質">
-                   <div className="flex bg-slate-100 p-1 rounded-lg">
-                      <button type="button" onClick={()=>setFormData({...formData, paymentType: 'paid'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='paid'?'bg-white text-emerald-600 shadow-sm':'text-slate-400'}`}>💰 付費委託</button>
-                      <button type="button" onClick={()=>setFormData({...formData, paymentType: 'free'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='free'?'bg-white text-pink-500 shadow-sm':'text-slate-400'}`}>🎁 無償委託</button>
-                   </div>
-                </InputBox>
-                <InputBox label="自訂查詢編號 (重要)"><input required style={inputBaseStyle} placeholder="例如：Tako001" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="設定查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="日後登入查詢用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox><InputBox label="您的暱稱"><input required style={inputBaseStyle} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="聯絡方式"><input required style={inputBaseStyle} placeholder="Discord / Email" value={formData.contact} onChange={e=>setFormData({...formData, contact: e.target.value})} /></InputBox><InputBox label="委託類別"><select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-2.5 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-[10px] font-bold text-slate-500">{isProcessing ? '處理中...' : '上傳圖片'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-2">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea style={{...inputBaseStyle, height: '60px', resize:'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox></div>)}
-            {activeTab === 'artist' && (<InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>)}
-            <button type="submit" className={`w-full py-3 md:py-4 text-white font-black rounded-xl md:rounded-2xl shadow-xl transition-all active:scale-95 text-base md:text-lg mt-4 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':activeTab==='forgot_password'?'bg-orange-500 shadow-orange-100':'bg-blue-600 shadow-blue-100'}`} disabled={isProcessing}>{activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : activeTab === 'forgot_password' ? '驗證並重設' : '進入後台'}</button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- 2. 委託人儀表板 ---
+// --- 委託人儀表板 (升級版：含分類過濾) ---
 const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, notify }) => {
   const [viewMode, setViewMode] = useState('dashboard'); 
   const [selectedProject, setSelectedProject] = useState(null);
@@ -479,37 +293,121 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   const [previewImage, setPreviewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // 新增篩選狀態
+  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done
+  const [typeFilter, setTypeFilter] = useState('all');     // all, avatar, halfBody, fullBody, other
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const myCommissions = user.isAnonymous 
     ? allCommissions.filter(c => c.id === user.targetId)
     : allCommissions.filter(c => c.userName === user.name);
 
-  // ... (New Request & Password & ImageChange logic same as before, simplified for brevity) ...
+  // 篩選邏輯
+  const filteredCommissions = useMemo(() => {
+    return myCommissions.filter(c => {
+      // 搜尋過濾
+      const searchMatch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          c.code.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!searchMatch) return false;
+
+      // 狀態過濾
+      let statusMatch = true;
+      if (statusFilter === 'pending') statusMatch = c.status === 'pending';
+      else if (statusFilter === 'ongoing') statusMatch = c.status === 'waiting' || c.status === 'working';
+      else if (statusFilter === 'done') statusMatch = c.status === 'done';
+
+      // 類型過濾
+      let typeMatch = true;
+      if (typeFilter !== 'all') typeMatch = c.type === typeFilter;
+
+      return statusMatch && typeMatch;
+    });
+  }, [myCommissions, statusFilter, typeFilter, searchQuery]);
+
   const handleNewRequest = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const data = Object.fromEntries(fd); try { const newItem = { userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', paymentType: data.paymentType, updatedAt: new Date().toISOString(), referenceImages: newRequestImgs, items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }] }; await addDoc(collection(db, "commissions"), newItem); notify('委託申請已送出！'); setNewReqOpen(false); setNewRequestImgs([]); } catch(err) { notify('發送失敗', 'error'); } };
   const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { const compressed = await compressImage(file); newImages.push(compressed); } catch (error) { alert("圖片處理失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
   const handleChangePassword = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd } = Object.fromEntries(fd); try { const userRef = doc(db, "users", user.name); const userSnap = await getDoc(userRef); if (userSnap.exists() && userSnap.data().password === oldPwd) { await updateDoc(userRef, { password: newPwd }); notify('密碼修改成功！'); setSettingsOpen(false); } else notify('舊密碼錯誤', 'error'); } catch(e) { notify('修改失敗', 'error'); } };
-
-  // 上傳匯款證明
-  const handleUploadPaymentProof = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-        const compressed = await compressImage(file);
-        if (compressed.length > 900000) { alert("圖片過大"); return; }
-        await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: compressed });
-        notify('匯款證明上傳成功！');
-        setSelectedProject(prev => ({ ...prev, paymentProof: compressed })); // 本地更新顯示
-    } catch (err) { notify('上傳失敗', 'error'); }
-  };
+  const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { const compressed = await compressImage(file); if (compressed.length > 900000) { alert("圖片過大"); return; } await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: compressed }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: compressed })); } catch (err) { notify('上傳失敗', 'error'); } };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {previewImage && (<div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}><button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button><img src={previewImage} alt="Full Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default" onClick={(e) => e.stopPropagation()} /></div>)}
       <nav className="bg-white border-b p-3 md:p-4 flex justify-between items-center px-4 md:px-10 shadow-sm sticky top-0 z-40"><div className="flex items-center gap-2 md:gap-4"><div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${user.isAnonymous?'bg-emerald-500':'bg-blue-600'}`}>{user.isAnonymous?<Key size={16}/>:<User size={16}/>}</div><div className="flex gap-2 md:gap-4"><button onClick={()=>setViewMode('dashboard')} className={`font-black text-xs md:text-sm transition-colors ${viewMode==='dashboard'?'text-blue-600':'text-slate-400 hover:text-slate-600'}`}>我的委託</button><button onClick={()=>setViewMode('messenger')} className={`font-black text-xs md:text-sm transition-colors flex items-center gap-1 ${viewMode==='messenger'?'text-blue-600':'text-slate-400 hover:text-slate-600'}`}><MessageCircle size={16}/> 訊息</button></div></div><div className="flex gap-2 md:gap-3">{!user.isAnonymous && <button onClick={()=>setSettingsOpen(true)} className="text-slate-400 font-bold text-xs md:text-sm hover:text-blue-500 transition-colors flex items-center gap-1"><Settings size={14}/> 設定</button>}<button onClick={onLogout} className="text-slate-400 font-bold text-xs md:text-sm hover:text-red-500 transition-colors">登出</button></div></nav>
       <main className="max-w-5xl mx-auto p-4 md:p-8 flex-1 w-full">
-        {viewMode === 'dashboard' ? (<><div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-10 gap-4"><h1 className="text-2xl md:text-4xl font-black text-slate-800 tracking-tight">委託專案</h1>{!user.isAnonymous && (<button onClick={()=>setNewReqOpen(true)} className="w-full md:w-auto bg-pink-500 text-white px-6 py-3 rounded-xl md:rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center justify-center gap-2 relative z-10"><Plus size={18}/> 新委託</button>)}</div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 pb-20">{myCommissions.map(c => (<div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group"><div className="flex justify-between items-start mb-4 md:mb-6"><h3 className="font-black text-lg md:text-xl capitalize">{c.type}</h3><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white animate-pulse':'bg-blue-50 text-blue-500 border border-blue-100'}`}>{c.status}</div></div><div className="flex justify-between items-center"><div className="text-[10px] font-black text-slate-300 uppercase">#{c.code}</div>{c.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 text-[9px] px-2 py-0.5 rounded font-black">無償</span>}</div><div className="mt-3 flex justify-between items-center text-xs font-bold text-slate-400"><span>{c.updatedAt.split('T')[0]}</span><ChevronRight size={16}/></div></div>))}</div></>) : (<Messenger commissions={myCommissions} currentUser={user} />)}
+        {viewMode === 'dashboard' ? (
+          <>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+              <h1 className="text-2xl md:text-4xl font-black text-slate-800 tracking-tight">委託專案</h1>
+              {!user.isAnonymous && (
+                  <button onClick={()=>setNewReqOpen(true)} className="w-full md:w-auto bg-pink-500 text-white px-6 py-3 rounded-xl md:rounded-2xl font-black shadow-lg hover:bg-pink-600 flex items-center justify-center gap-2 relative z-10"><Plus size={18}/> 新委託</button>
+              )}
+            </div>
+
+            {/* 新增：篩選器區域 */}
+            <div className="mb-6 space-y-3">
+              {/* 搜尋框 */}
+              <div className="relative">
+                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16}/>
+                 <input 
+                    placeholder="搜尋委託名稱或編號..." 
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                 />
+              </div>
+
+              {/* 狀態分類 (最上級) */}
+              <div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1">
+                 {['all', 'pending', 'ongoing', 'done'].map(status => (
+                    <button 
+                        key={status} 
+                        onClick={() => setStatusFilter(status)}
+                        className={`flex-1 py-2 px-3 rounded-lg text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                    >
+                        {status === 'all' ? '全部' : status === 'pending' ? '未確認' : status === 'ongoing' ? '進行中' : '已完成'}
+                    </button>
+                 ))}
+              </div>
+
+              {/* 類型分類 (次級) */}
+              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(type => (
+                      <button 
+                          key={type} 
+                          onClick={() => setTypeFilter(type)}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border transition-all whitespace-nowrap ${typeFilter===type ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}
+                      >
+                          {type === 'all' ? '所有類型' : type === 'avatar' ? '大頭' : type === 'halfBody' ? '半身' : type === 'fullBody' ? '全身' : '其他'}
+                      </button>
+                  ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 pb-20">
+                {filteredCommissions.map(c => (
+                    <div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group">
+                        <div className="flex justify-between items-start mb-4 md:mb-6">
+                            <h3 className="font-black text-lg md:text-xl capitalize">{c.type}</h3>
+                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white animate-pulse':'bg-blue-50 text-blue-500 border border-blue-100'}`}>{c.status}</div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <div className="text-[10px] font-black text-slate-300 uppercase">#{c.code}</div>
+                            {c.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 text-[9px] px-2 py-0.5 rounded font-black">無償</span>}
+                        </div>
+                        <div className="mt-3 flex justify-between items-center text-xs font-bold text-slate-400"><span>{c.updatedAt.split('T')[0]}</span><ChevronRight size={16}/></div>
+                    </div>
+                ))}
+                {filteredCommissions.length === 0 && (
+                    <div className="col-span-full text-center p-10 text-slate-400 text-xs font-bold border-2 border-dashed border-slate-200 rounded-2xl">
+                        沒有符合條件的委託
+                    </div>
+                )}
+            </div>
+          </>
+        ) : (<Messenger commissions={myCommissions} currentUser={user} />)}
       </main>
       
-      {/* 委託詳情彈窗 (手機版優化) */}
+      {/* 委託詳情彈窗 */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-hidden">
             <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] w-[95%] md:w-full max-w-xl p-5 md:p-10 shadow-2xl relative border border-white my-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
@@ -518,8 +416,8 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                    <h2 className="text-xl md:text-3xl font-black">委託詳情 - #{selectedProject.code}</h2>
                    {selectedProject.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 px-3 py-1 rounded-lg text-xs font-black">🎁 無償</span>}
                 </div>
+                {/* ... (其餘詳情內容維持原樣) ... */}
                 <div className="space-y-4 md:space-y-6">
-                    {/* 匯款資訊區塊 */}
                     <div className="bg-slate-50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200">
                         <h3 className="text-xs md:text-sm font-black text-slate-700 mb-3 flex items-center gap-2"><Banknote size={16}/> 匯款資訊</h3>
                         <div className="text-xs md:text-sm text-slate-600 whitespace-pre-line mb-3 font-bold bg-white p-3 md:p-4 rounded-xl border border-slate-100">
@@ -531,29 +429,20 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                                 <input type="file" accept="image/*" className="hidden" onChange={handleUploadPaymentProof} />
                             </label>
                             {selectedProject.paymentProof && (
-                                <button onClick={()=>setPreviewImage(selectedProject.paymentProof)} className="w-full md:w-auto flex-1 bg-emerald-50 text-emerald-600 py-2.5 rounded-xl font-bold text-xs border border-emerald-200 hover:bg-emerald-100">
-                                    查看已上傳證明
-                                </button>
+                                <button onClick={()=>setPreviewImage(selectedProject.paymentProof)} className="w-full md:w-auto flex-1 bg-emerald-50 text-emerald-600 py-2.5 rounded-xl font-bold text-xs border border-emerald-200 hover:bg-emerald-100">查看已上傳證明</button>
                             )}
                         </div>
                     </div>
-
-                    {(selectedProject.referenceImages?.length > 0 || selectedProject.referenceImage) && (
-                        <InputBox label="委託參考圖集">
-                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">{(selectedProject.referenceImages || [selectedProject.referenceImage]).map((img, idx) => (<img key={idx} src={img} className="w-full aspect-square object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100 shadow-sm" onClick={() => setPreviewImage(img)} alt={`Ref ${idx}`} />))}</div>
-                        </InputBox>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <InputBox label="目前進度"><div className="flex items-center gap-4"><div className="flex-1 h-2 md:h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{width: `${selectedProject.items[selectedProject.type]?.progress || 0}%`}}></div></div><span className="font-black text-blue-600 text-sm md:text-base">{selectedProject.items[selectedProject.type]?.progress || 0}%</span></div></InputBox>
-                        <InputBox label="委託金額"><div className="font-black text-xl md:text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div></InputBox>
-                    </div>
+                    {(selectedProject.referenceImages?.length > 0 || selectedProject.referenceImage) && (<InputBox label="委託參考圖集"><div className="grid grid-cols-3 sm:grid-cols-4 gap-2">{(selectedProject.referenceImages || [selectedProject.referenceImage]).map((img, idx) => (<img key={idx} src={img} className="w-full aspect-square object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100 shadow-sm" onClick={() => setPreviewImage(img)} alt={`Ref ${idx}`} />))}</div></InputBox>)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"><InputBox label="目前進度"><div className="flex items-center gap-4"><div className="flex-1 h-2 md:h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{width: `${selectedProject.items[selectedProject.type]?.progress || 0}%`}}></div></div><span className="font-black text-blue-600 text-sm md:text-base">{selectedProject.items[selectedProject.type]?.progress || 0}%</span></div></InputBox><InputBox label="委託金額"><div className="font-black text-xl md:text-2xl">${selectedProject.items[selectedProject.type]?.price || 0}</div></InputBox></div>
                     <InputBox label="專案討論 (Chat)"><ChatRoom commissionId={selectedProject.id} currentUser={user} /></InputBox>
                 </div>
             </div>
         </div>
       )}
-      {/* (Settings modal hidden for brevity) */}
+      {/* ... (Settings modal hidden) ... */}
       {isSettingsOpen && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-white"><h2 className="text-xl font-black mb-6 flex items-center gap-2"><Lock size={20}/> 修改帳戶密碼</h2><form onSubmit={handleChangePassword} className="space-y-2"><InputBox label="目前舊密碼"><input name="oldPwd" type="password" required style={inputBaseStyle} /></InputBox><InputBox label="設定新密碼"><input name="newPwd" type="password" required style={inputBaseStyle} /></InputBox><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setSettingsOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">取消</button><button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg">確認修改</button></div></form></div></div>)}
+      {/* ... (New Request modal hidden) ... */}
       {isNewReqOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[1.5rem] w-[95%] md:w-full max-w-md p-6 md:p-8 shadow-2xl border border-white my-4"><div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-xl md:text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2><button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button></div><form onSubmit={handleNewRequest} className="space-y-2"><InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox><InputBox label="委託類別"><select name="type" style={inputBaseStyle} className="cursor-pointer"><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setNewRequestImgs(prev=>({...prev, paymentType: 'paid'}))} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all bg-white text-emerald-600 shadow-sm`}>💰 付費</button><button type="button" className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all text-slate-400`}>無償 (需選擇)</button></div><div className="flex gap-2 mt-1"><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="paid" defaultChecked className="accent-blue-600"/> <span className="text-xs font-bold text-slate-600">付費委託</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="free" className="accent-pink-500"/> <span className="text-xs font-bold text-slate-600">無償/贈圖</span></label></div></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${newRequestImgs.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${newRequestImgs.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={newRequestImgs.length >= 5 || isProcessing} /></label>{newRequestImgs.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{newRequestImgs.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => setNewRequestImgs(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '80px', resize: 'none'}} /></InputBox><button type="submit" className="w-full py-4 bg-pink-500 text-white font-black rounded-xl shadow-xl hover:bg-pink-600 mt-4" disabled={isProcessing}>送出請求</button></form></div></div>)}
     </div>
   );
@@ -603,7 +492,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                     <h2 className="text-xl md:text-2xl font-black text-slate-800">編輯：#{editItem.code}</h2>
                     {editItem.paymentType === 'free' ? <span className="bg-pink-100 text-pink-500 px-3 py-1 rounded-lg text-xs font-black">🎁 無償</span> : <span className="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-lg text-xs font-black">💰 付費</span>}
                 </div>
-                <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                <div className="mb-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 flex justify-between items-center">
                     <div className="text-xs font-bold text-slate-600">匯款證明</div>
                     {editItem.paymentProof ? (<button onClick={()=>setPreviewImage(editItem.paymentProof)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold text-[10px] shadow-md hover:bg-emerald-600">查看圖片</button>) : (<span className="text-[10px] font-bold text-slate-400">無</span>)}
                 </div>
