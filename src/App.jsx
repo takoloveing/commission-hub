@@ -6,10 +6,10 @@ import {
   Save, X, Activity, Image as ImageIcon, DollarSign, CreditCard, 
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
-  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type
+  MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type, Ban
 } from 'lucide-react';
 
-// --- Firebase 整合連線 (改回標準 NPM 引入，解決白畫面問題) ---
+// --- Firebase 整合連線 ---
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
@@ -73,7 +73,6 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 使用 JPEG 0.6 壓縮
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         resolve(dataUrl);
       };
@@ -83,7 +82,7 @@ const compressImage = (file) => {
   });
 };
 
-// --- 上傳圖片到 Storage (解決大圖問題) ---
+// --- 上傳圖片到 Storage ---
 const uploadImageToStorage = async (file) => {
   if (!storage) throw new Error("Storage not initialized");
   const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
@@ -127,6 +126,27 @@ const inputBaseStyle = {
   fontWeight: '700',
   fontSize: '14px',
   color: '#1e293b'
+};
+
+// --- 狀態標籤樣式 helper ---
+const getStatusStyle = (status) => {
+    switch (status) {
+        case 'pending': return 'bg-pink-500 text-white animate-pulse';
+        case 'declined': return 'bg-slate-200 text-slate-500 border border-slate-300';
+        case 'done': return 'bg-emerald-500 text-white';
+        default: return 'bg-blue-50 text-blue-500 border border-blue-100';
+    }
+};
+
+const getStatusLabel = (status) => {
+    switch (status) {
+        case 'pending': return '待核准';
+        case 'waiting': return '排單中';
+        case 'working': return '進行中';
+        case 'done': return '已完成';
+        case 'declined': return '已婉拒';
+        default: return status;
+    }
 };
 
 // --- 核心聊天室組件 ---
@@ -273,7 +293,7 @@ const Messenger = ({ commissions, currentUser }) => {
                         </span>
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">#{c.code}</span>
                     </div>
-                    <div className="text-[10px] md:text-xs font-bold text-slate-400 truncate">{c.type} • {c.status}</div>
+                    <div className="text-[10px] md:text-xs font-bold text-slate-400 truncate">{c.type} • {getStatusLabel(c.status)}</div>
                 </button>
             )) : (
                 <div className="text-center p-8 text-slate-400 text-xs font-bold">沒有進行中的對話</div>
@@ -350,17 +370,14 @@ const App = () => {
       return;
     }
     
-    // 修復：匿名查詢邏輯 - 允許查詢該編號+密碼對應的所有委託
     if (action === 'anonymous_track') {
-      // 先找一筆符合的來驗證身分
       const target = commissions.find(c => c.code === data.code && c.password === data.password);
       if (target) {
-        // 設定 currentUser，重點是記住 code，以便 Dashboard 篩選
         setCurrentUser({ 
             name: target.name, 
             role: 'client', 
             isAnonymous: true, 
-            code: data.code // 綁定編號
+            code: data.code 
         });
         setView('client');
       } else {
@@ -475,7 +492,6 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
     const newImages = [];
     for (const file of files) {
         try { 
-            // 嘗試上傳到 Storage，失敗則使用壓縮
             let url;
             try { url = await uploadImageToStorage(file); } 
             catch { url = await compressImage(file); }
@@ -501,7 +517,7 @@ const LoginView = ({ onAuth, onAnonymousRequest }) => {
             {activeTab === 'anonymous_track' && (<><InputBox label="匿名編號"><input required style={inputBaseStyle} placeholder="您當初設定的編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox></>)}
             {activeTab === 'anonymous_req' && (<div className="space-y-0 overflow-y-auto max-h-[50vh] p-1 custom-scrollbar">
                 <InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setFormData({...formData, paymentType: 'paid'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='paid'?'bg-white text-emerald-600 shadow-sm':'text-slate-400'}`}>💰 付費</button><button type="button" onClick={()=>setFormData({...formData, paymentType: 'free'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='free'?'bg-white text-pink-500 shadow-sm':'text-slate-400'}`}>🎁 無償</button></div></InputBox>
-                <InputBox label="自訂查詢編號 (重要)"><input required style={inputBaseStyle} placeholder="例如：Tako001" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="設定查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="日後登入查詢用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox><InputBox label="您的暱稱"><input required style={inputBaseStyle} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="聯絡方式"><input required style={inputBaseStyle} placeholder="Discord / Email" value={formData.contact} onChange={e=>setFormData({...formData, contact: e.target.value})} /></InputBox><InputBox label="委託類別"><select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea style={{...inputBaseStyle, height: '60px', resize:'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox></div>)}
+                <InputBox label="自訂查詢編號 (重要)"><input required style={inputBaseStyle} placeholder="例如：Tako001" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="設定查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="日後登入查詢用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox><InputBox label="您的暱稱"><input required style={inputBaseStyle} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="聯絡方式"><input required style={inputBaseStyle} placeholder="Discord / Email" value={formData.contact} onChange={e=>setFormData({...formData, contact: e.target.value})} /></InputBox><InputBox label="委託類別"><select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '60px', resize:'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox></div>)}
             {activeTab === 'artist' && (<InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>)}
             <button type="submit" className={`w-full py-3 md:py-4 text-white font-black rounded-xl md:rounded-2xl shadow-xl transition-all active:scale-95 text-base md:text-lg mt-4 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':activeTab==='forgot_password'?'bg-orange-500 shadow-orange-100':'bg-blue-600 shadow-blue-100'}`} disabled={isProcessing}>{activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : activeTab === 'forgot_password' ? '驗證並重設' : '進入後台'}</button>
         </form>
@@ -524,10 +540,8 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   const [statusFilter, setStatusFilter] = useState('all'); 
   const [typeFilter, setTypeFilter] = useState('all');     
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState('date_desc'); // date_desc, date_asc, name_asc, name_desc
+  const [sortOrder, setSortOrder] = useState('date_desc'); 
   
-  // 修復：匿名查詢時，只要編號和密碼正確，就能看到所有符合條件的委託 (不再只是一筆)
-  // 如果是匿名用戶，user.code 是登入時輸入的編號
   const myCommissions = user.isAnonymous 
     ? allCommissions.filter(c => c.code === user.code)
     : allCommissions.filter(c => c.userName === user.name);
@@ -535,25 +549,22 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   // 篩選與排序邏輯
   const filteredCommissions = useMemo(() => {
     let result = myCommissions.filter(c => {
-      // 搜尋過濾
       const searchMatch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           c.code.toLowerCase().includes(searchQuery.toLowerCase());
       if (!searchMatch) return false;
 
-      // 狀態過濾
       let statusMatch = true;
       if (statusFilter === 'pending') statusMatch = c.status === 'pending';
       else if (statusFilter === 'ongoing') statusMatch = c.status === 'waiting' || c.status === 'working';
       else if (statusFilter === 'done') statusMatch = c.status === 'done';
+      else if (statusFilter === 'declined') statusMatch = c.status === 'declined'; // 新增
 
-      // 類型過濾
       let typeMatch = true;
       if (typeFilter !== 'all') typeMatch = c.type === typeFilter;
       
       return statusMatch && typeMatch;
     });
 
-    // 排序
     result.sort((a, b) => {
         if (sortOrder === 'date_desc') return new Date(b.updatedAt) - new Date(a.updatedAt);
         if (sortOrder === 'date_asc') return new Date(a.updatedAt) - new Date(b.updatedAt);
@@ -594,58 +605,38 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
               )}
             </div>
 
-            {/* 新增：篩選器區域 */}
+            {/* 篩選器區域 */}
             <div className="mb-6 space-y-3">
-              {/* 搜尋框與排序 */}
               <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 text-slate-400" size={16}/>
-                    <input 
-                        placeholder="搜尋名稱或編號..." 
-                        className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                    />
+                    <input placeholder="搜尋名稱或編號..." className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   </div>
-                  <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1">
+                  <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">
                       {sortOrder.includes('date') ? <Calendar size={16}/> : <Type size={16}/>}
                       {sortOrder.includes('asc') ? <ArrowLeft className="rotate-90" size={12}/> : <ArrowLeft className="-rotate-90" size={12}/>}
                   </button>
               </div>
-
-              {/* 狀態分類 (最上級) */}
               <div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1">
-                 {['all', 'pending', 'ongoing', 'done'].map(status => (
-                    <button 
-                        key={status} 
-                        onClick={() => setStatusFilter(status)}
-                        className={`flex-1 py-2 px-3 rounded-lg text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                    >
-                        {status === 'all' ? '全部' : status === 'pending' ? '未確認' : status === 'ongoing' ? '進行中' : '已完成'}
+                 {['all', 'pending', 'ongoing', 'done', 'declined'].map(status => (
+                    <button key={status} onClick={() => setStatusFilter(status)} className={`flex-1 py-2 px-3 rounded-lg text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        {status === 'all' ? '全部' : status === 'pending' ? '未確認' : status === 'ongoing' ? '進行中' : status === 'done' ? '已完成' : '已婉拒'}
                     </button>
                  ))}
               </div>
-
-              {/* 類型分類 (次級) */}
               <div className="flex gap-2 overflow-x-auto no-scrollbar">
                   {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(type => (
-                      <button 
-                          key={type} 
-                          onClick={() => setTypeFilter(type)}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border transition-all whitespace-nowrap ${typeFilter===type ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}
-                      >
-                          {type === 'all' ? '所有類型' : type === 'avatar' ? '大頭' : type === 'halfBody' ? '半身' : type === 'fullBody' ? '全身' : '其他'}
-                      </button>
+                      <button key={type} onClick={() => setTypeFilter(type)} className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border transition-all whitespace-nowrap ${typeFilter===type ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}>{type === 'all' ? '所有類型' : type === 'avatar' ? '大頭' : type === 'halfBody' ? '半身' : type === 'fullBody' ? '全身' : '其他'}</button>
                   ))}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 pb-20">
                 {filteredCommissions.map(c => (
-                    <div key={c.id} onClick={()=>setSelectedProject(c)} className="bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group">
+                    <div key={c.id} onClick={()=>setSelectedProject(c)} className={`bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 ${c.status==='declined'?'border-slate-200 bg-slate-50 opacity-80':'border-slate-100'} hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group`}>
                         <div className="flex justify-between items-start mb-4 md:mb-6">
                             <h3 className="font-black text-lg md:text-xl capitalize">{c.type}</h3>
-                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white animate-pulse':'bg-blue-50 text-blue-500 border border-blue-100'}`}>{c.status}</div>
+                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${getStatusStyle(c.status)}`}>{getStatusLabel(c.status)}</div>
                         </div>
                         <div className="flex justify-between items-center">
                             <div className="text-[10px] font-black text-slate-300 uppercase">#{c.code}</div>
@@ -654,11 +645,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                         <div className="mt-3 flex justify-between items-center text-xs font-bold text-slate-400"><span>{c.updatedAt.split('T')[0]}</span><ChevronRight size={16}/></div>
                     </div>
                 ))}
-                {filteredCommissions.length === 0 && (
-                    <div className="col-span-full text-center p-10 text-slate-400 text-xs font-bold border-2 border-dashed border-slate-200 rounded-2xl">
-                        沒有符合條件的委託
-                    </div>
-                )}
+                {filteredCommissions.length === 0 && (<div className="col-span-full text-center p-10 text-slate-400 text-xs font-bold border-2 border-dashed border-slate-200 rounded-2xl">沒有符合條件的委託</div>)}
             </div>
           </>
         ) : (<Messenger commissions={myCommissions} currentUser={user} />)}
@@ -673,21 +660,13 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
                    <h2 className="text-xl md:text-3xl font-black">委託詳情 - #{selectedProject.code}</h2>
                    {selectedProject.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 px-3 py-1 rounded-lg text-xs font-black">🎁 無償</span>}
                 </div>
-                {/* ... (其餘詳情內容維持原樣) ... */}
                 <div className="space-y-4 md:space-y-6">
                     <div className="bg-slate-50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200">
                         <h3 className="text-xs md:text-sm font-black text-slate-700 mb-3 flex items-center gap-2"><Banknote size={16}/> 匯款資訊</h3>
-                        <div className="text-xs md:text-sm text-slate-600 whitespace-pre-line mb-3 font-bold bg-white p-3 md:p-4 rounded-xl border border-slate-100">
-                            {artistPaymentInfo || "繪師尚未設定匯款資訊，請透過聊天室詢問。"}
-                        </div>
+                        <div className="text-xs md:text-sm text-slate-600 whitespace-pre-line mb-3 font-bold bg-white p-3 md:p-4 rounded-xl border border-slate-100">{artistPaymentInfo || "繪師尚未設定匯款資訊，請透過聊天室詢問。"}</div>
                         <div className="flex flex-col md:flex-row items-center gap-3">
-                            <label className="w-full flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-                                <UploadCloud size={16}/> 上傳匯款證明
-                                <input type="file" accept="image/*" className="hidden" onChange={handleUploadPaymentProof} />
-                            </label>
-                            {selectedProject.paymentProof && (
-                                <button onClick={()=>setPreviewImage(selectedProject.paymentProof)} className="w-full md:w-auto flex-1 bg-emerald-50 text-emerald-600 py-2.5 rounded-xl font-bold text-xs border border-emerald-200 hover:bg-emerald-100">查看已上傳證明</button>
-                            )}
+                            <label className="w-full flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"><UploadCloud size={16}/> 上傳匯款證明<input type="file" accept="image/*" className="hidden" onChange={handleUploadPaymentProof} /></label>
+                            {selectedProject.paymentProof && (<button onClick={()=>setPreviewImage(selectedProject.paymentProof)} className="w-full md:w-auto flex-1 bg-emerald-50 text-emerald-600 py-2.5 rounded-xl font-bold text-xs border border-emerald-200 hover:bg-emerald-100">查看已上傳證明</button>)}
                         </div>
                     </div>
                     {(selectedProject.referenceImages?.length > 0 || selectedProject.referenceImage) && (<InputBox label="委託參考圖集"><div className="grid grid-cols-3 sm:grid-cols-4 gap-2">{(selectedProject.referenceImages || [selectedProject.referenceImage]).map((img, idx) => (<img key={idx} src={img} className="w-full aspect-square object-cover rounded-xl cursor-pointer hover:opacity-90 border border-slate-100 shadow-sm" onClick={() => setPreviewImage(img)} alt={`Ref ${idx}`} />))}</div></InputBox>)}
@@ -705,14 +684,14 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   );
 };
 
-// --- 3. 繪師後台 (新增匯款資訊設定 & 查看證明) ---
+// --- 3. 繪師後台 ---
 const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   // ... (State logic same as before) ...
   const [activeMainTab, setActiveMainTab] = useState('commissions'); const [subTab, setSubTab] = useState('all'); const [searchQuery, setSearchQuery] = useState(''); const [editItem, setEditItem] = useState(null); const [selectedUserDetail, setSelectedUserDetail] = useState(null); const [isSettingsOpen, setSettingsOpen] = useState(false); const [previewImage, setPreviewImage] = useState(null);
   
-  // 新增：後台的排序與狀態過濾
+  // 新增：排序與狀態過濾
   const [sortOrder, setSortOrder] = useState('date_desc'); 
-  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done (用於委託類 tab)
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const filteredAll = useMemo(() => { 
       let result = commissions.filter(c => 
@@ -734,8 +713,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
   }, [commissions, searchQuery, sortOrder]);
 
   const requestsList = filteredAll.filter(c => c.status === 'pending');
-  // 修改：委託類現在包含 done，並支援 statusFilter
-  const commissionsList = filteredAll.filter(c => c.status !== 'pending');
+  const commissionsList = filteredAll.filter(c => c.status !== 'pending'); // 包含進行中與已完成/婉拒
   
   const getDisplayList = () => {
       let list = activeMainTab === 'commissions' ? commissionsList : requestsList;
@@ -746,9 +724,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
           else list = list.filter(c => c.status === statusFilter);
       }
 
-      // 類型過濾
       if (subTab !== 'all') list = list.filter(c => c.type === subTab);
-      
       return list;
   };
 
@@ -771,26 +747,21 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             {activeMainTab === 'messages' ? (<Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />) : (<>
                 {activeMainTab !== 'accounts' && (
                     <div className="space-y-4 mb-8">
-                         {/* 排序按鈕 */}
                          <div className="flex justify-end">
                             <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">
                                 {sortOrder.includes('date') ? <Calendar size={14}/> : <Type size={14}/>}
                                 {sortOrder.includes('asc') ? '升冪' : '降冪'}
                             </button>
                          </div>
-
-                         {/* 狀態過濾 (僅委託類) */}
                          {activeMainTab === 'commissions' && (
                             <div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1 w-fit">
-                                {['all', 'ongoing', 'done'].map(status => (
+                                {['all', 'ongoing', 'done', 'declined'].map(status => (
                                     <button key={status} onClick={() => setStatusFilter(status)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>
-                                        {status === 'all' ? '全部狀態' : status === 'ongoing' ? '進行中' : '已完成'}
+                                        {status === 'all' ? '全部狀態' : status === 'ongoing' ? '進行中' : status === 'done' ? '已完成' : '已婉拒'}
                                     </button>
                                 ))}
                             </div>
                          )}
-                         
-                         {/* 類型過濾 */}
                          <div className="flex gap-2 bg-white p-1.5 rounded-xl border w-fit shadow-sm overflow-x-auto max-w-full">
                             {['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(t => (
                                 <button key={t} onClick={()=>setSubTab(t)} className={`px-4 lg:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${subTab===t?'bg-slate-900 text-white':'text-slate-400 hover:text-slate-600'}`}>{t === 'all' ? '所有類型' : t}</button>
@@ -804,8 +775,8 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                 {(activeMainTab === 'commissions' || activeMainTab === 'requests') && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                         {getDisplayList().map(c => (
-                            <div key={c.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all relative">
-                                <div className="flex justify-between items-start mb-4"><div><h3 className="font-black text-lg">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div><div className="flex flex-col items-end gap-1"><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${c.status==='pending'?'bg-pink-500 text-white':'bg-blue-50 text-blue-500'}`}>{c.status}</div>{c.paymentType === 'free' && <span className="text-[9px] font-black text-pink-400 bg-pink-50 px-2 py-0.5 rounded">無償</span>}</div></div><div className="text-[10px] font-black text-slate-400 uppercase mb-4 bg-slate-50 p-2 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div><button onClick={()=>setEditItem(c)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button>
+                            <div key={c.id} className={`bg-white p-6 rounded-[2rem] border ${c.status==='declined'?'border-slate-200 opacity-60 bg-slate-50':'border-slate-100'} shadow-sm hover:shadow-2xl transition-all relative`}>
+                                <div className="flex justify-between items-start mb-4"><div><h3 className="font-black text-lg">{c.name}</h3><span className="text-[10px] font-black text-slate-300">#{c.code}</span></div><div className="flex flex-col items-end gap-1"><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${getStatusStyle(c.status)}`}>{getStatusLabel(c.status)}</div>{c.paymentType === 'free' && <span className="text-[9px] font-black text-pink-400 bg-pink-50 px-2 py-0.5 rounded">無償</span>}</div></div><div className="text-[10px] font-black text-slate-400 uppercase mb-4 bg-slate-50 p-2 rounded-xl border">類別: <span className="text-slate-800">{c.type}</span></div><button onClick={()=>setEditItem(c)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs hover:bg-blue-600 transition-all">管理詳情</button>
                             </div>
                         ))}
                         {getDisplayList().length === 0 && (
@@ -816,7 +787,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             </>)}
         </main>
       </div>
-      {/* 繪師設定彈窗 (含匯款資訊) */}
+      {/* 繪師設定彈窗 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-white">
@@ -831,7 +802,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             </div>
         </div>
       )}
-      {/* 編輯委託彈窗 (手機版優化) */}
+      {/* 編輯委託彈窗 (手機版優化 + 婉拒按鈕) */}
       {editItem && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[2rem] w-[95%] md:w-full max-w-xl p-5 md:p-10 shadow-2xl relative border border-white my-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
@@ -846,16 +817,25 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                 </div>
                 {(editItem.referenceImages?.length > 0 || editItem.referenceImage) && (<InputBox label="參考圖集"><div className="grid grid-cols-3 sm:grid-cols-4 gap-2">{(editItem.referenceImages || [editItem.referenceImage]).map((img, idx) => (<img key={idx} src={img} className="w-full aspect-square object-cover rounded-lg border border-slate-100 shadow-sm" onClick={() => setPreviewImage(img)} />))}</div></InputBox>)}
                 <form onSubmit={async (e)=>{ e.preventDefault(); await updateDoc(doc(db, "commissions", editItem.id), { ...editItem, updatedAt: new Date().toISOString() }); notify('雲端同步成功'); setEditItem(null); }} className="space-y-1">
-                    <div className="grid grid-cols-2 gap-3"><InputBox label="編號"><input style={inputBaseStyle} value={editItem.code} onChange={e=>setEditItem({...editItem, code: e.target.value})} /></InputBox><InputBox label="狀態"><select style={inputBaseStyle} value={editItem.status} onChange={e=>setEditItem({...editItem, status: e.target.value})}><option value="pending">待核准</option><option value="waiting">排單中</option><option value="working">進行中</option><option value="done">已完成</option></select></InputBox></div>
+                    <div className="grid grid-cols-2 gap-3"><InputBox label="編號"><input style={inputBaseStyle} value={editItem.code} onChange={e=>setEditItem({...editItem, code: e.target.value})} /></InputBox><InputBox label="狀態"><select style={inputBaseStyle} value={editItem.status} onChange={e=>setEditItem({...editItem, status: e.target.value})}><option value="pending">待核准</option><option value="waiting">排單中</option><option value="working">進行中</option><option value="done">已完成</option><option value="declined">已婉拒</option></select></InputBox></div>
                     <div className="grid grid-cols-2 gap-3"><InputBox label="進度 %"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.progress || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].progress = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox><InputBox label="金額 $"><input type="number" style={inputBaseStyle} value={editItem.items[editItem.type]?.price || 0} onChange={e=>{ const items = {...editItem.items}; if(!items[editItem.type]) items[editItem.type] = {active: true, progress: 0, price: 0}; items[editItem.type].price = parseInt(e.target.value); setEditItem({...editItem, items}); }} /></InputBox></div>
                     <InputBox label="備註"><textarea style={{...inputBaseStyle, height:'80px', resize:'none'}} value={editItem.note} onChange={e=>setEditItem({...editItem, note: e.target.value})} /></InputBox>
                     <InputBox label="討論"><ChatRoom commissionId={editItem.id} currentUser={{ name: '繪師', role: 'artist' }} heightClass="h-48" /></InputBox>
-                    <div className="flex gap-3 pt-4"><button type="button" onClick={async ()=>{ if(confirm('警告：確定要刪除嗎？')){ await deleteDoc(doc(db, "commissions", editItem.id)); notify('已刪除'); setEditItem(null); } }} className="px-4 py-3 bg-red-50 text-red-500 font-bold rounded-xl text-xs">刪除</button><button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl text-sm">儲存同步</button></div>
+                    <div className="flex gap-3 pt-4">
+                        <button type="button" onClick={async ()=>{ 
+                            if(confirm('確定要婉拒此委託嗎？(委託人將會看到婉拒狀態)')){ 
+                                await updateDoc(doc(db, "commissions", editItem.id), { status: 'declined', updatedAt: new Date().toISOString() }); 
+                                notify('已婉拒委託'); 
+                                setEditItem(null); 
+                            } 
+                        }} className="px-4 py-3 bg-slate-200 text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-300 transition-all">婉拒</button>
+                        <button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl text-sm">儲存同步</button>
+                    </div>
                 </form>
             </div>
         </div>
       )}
-      {selectedUserDetail && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[2rem] w-[95%] md:w-full max-w-4xl p-5 md:p-10 shadow-2xl relative my-4 border border-white max-h-[85vh] overflow-y-auto custom-scrollbar"><button onClick={()=>setSelectedUserDetail(null)} className="absolute top-4 right-4 md:top-8 md:right-8 p-2 bg-slate-100 rounded-full"><X/></button><div className="mb-6 flex items-center gap-3"><div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500"><Users size={24}/></div><h2 className="text-2xl font-black">{selectedUserDetail.name}</h2></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{commissions.filter(c => c.userName === selectedUserDetail.name).map(c => (<div key={c.id} className="p-4 bg-slate-50 rounded-[1.5rem] border border-slate-200 flex justify-between items-center"><div><h4 className="font-black text-slate-800 text-sm">{c.type}</h4><span className="text-[10px] font-bold text-slate-400 uppercase">#{c.code} | {c.status}</span></div><button onClick={()=>{setEditItem(c); setSelectedUserDetail(null);}} className="p-2 bg-white rounded-xl shadow-sm text-blue-500"><Edit3 size={16}/></button></div>))}</div></div></div>)}
+      {selectedUserDetail && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[2rem] w-[95%] md:w-full max-w-4xl p-5 md:p-10 shadow-2xl relative my-4 border border-white max-h-[85vh] overflow-y-auto custom-scrollbar"><button onClick={()=>setSelectedUserDetail(null)} className="absolute top-4 right-4 md:top-8 md:right-8 p-2 bg-slate-100 rounded-full"><X/></button><div className="mb-6 flex items-center gap-3"><div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500"><Users size={24}/></div><h2 className="text-2xl font-black">{selectedUserDetail.name}</h2></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{commissions.filter(c => c.userName === selectedUserDetail.name).map(c => (<div key={c.id} className={`p-4 bg-slate-50 rounded-[1.5rem] border ${c.status==='declined'?'border-slate-300 opacity-60':'border-slate-200'} flex justify-between items-center`}><div><h4 className="font-black text-slate-800 text-sm">{c.type}</h4><span className="text-[10px] font-bold text-slate-400 uppercase">#{c.code} | {getStatusLabel(c.status)}</span></div><button onClick={()=>{setEditItem(c); setSelectedUserDetail(null);}} className="p-2 bg-white rounded-xl shadow-sm text-blue-500"><Edit3 size={16}/></button></div>))}</div></div></div>)}
     </div>
   );
 };
