@@ -9,12 +9,15 @@ import {
   MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter
 } from 'lucide-react';
 
-// --- Firebase 整合連線 ---
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+// --- Firebase 整合連線 (改回標準 NPM 引入，解決白畫面問題) ---
+import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
   doc, onSnapshot, query, orderBy, setDoc, getDoc, where 
-} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+} from 'firebase/firestore';
+import { 
+  getStorage, ref, uploadBytes, getDownloadURL 
+} from 'firebase/storage';
 
 // ⚠️ 重要：保留您的 Firebase 設定
 const firebaseConfig = {
@@ -26,8 +29,19 @@ const firebaseConfig = {
   appId: "1:1022991297741:web:df716fcd268c0d9d2c8d84"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+// 初始化 Firebase
+// 增加 try-catch 避免重複初始化導致報錯
+let firebaseApp;
+let db;
+let storage;
+
+try {
+  firebaseApp = initializeApp(firebaseConfig);
+  db = getFirestore(firebaseApp);
+  storage = getStorage(firebaseApp);
+} catch (error) {
+  console.error("Firebase Initialization Error:", error);
+}
 
 // --- 圖片壓縮工具 ---
 const compressImage = (file) => {
@@ -60,6 +74,7 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
+        // 使用 JPEG 0.6 壓縮
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         resolve(dataUrl);
       };
@@ -69,29 +84,37 @@ const compressImage = (file) => {
   });
 };
 
+// --- 上傳圖片到 Storage (解決大圖問題) ---
+const uploadImageToStorage = async (file) => {
+  if (!storage) throw new Error("Storage not initialized");
+  const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+  await uploadBytes(storageRef, file);
+  return await getDownloadURL(storageRef);
+};
+
 // --- 樣式組件：方框容器 ---
 const InputBox = ({ label, children, style = {} }) => (
   <div style={{
     backgroundColor: '#ffffff',
     border: '2px solid #cbd5e1',
     borderRadius: '16px',
-    padding: '12px 14px', 
-    marginBottom: '14px', 
+    padding: '12px 14px',
+    marginBottom: '14px',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
     position: 'relative', 
     zIndex: 10,
     ...style
-  }}>
+  }} className="md:rounded-2xl md:p-4 md:mb-4">
     <label style={{
-      fontSize: '11px',
+      fontSize: '10px',
       fontWeight: '900',
       color: '#94a3b8',
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
       marginBottom: '4px'
-    }}>{label}</label>
+    }} className="md:text-xs md:tracking-widest">{label}</label>
     {children}
   </div>
 );
@@ -117,7 +140,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (!commissionId) return;
+    if (!commissionId || !db) return;
     const q = query(collection(db, "messages"), where("commissionId", "==", commissionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -150,15 +173,21 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
 
     setIsUploading(true); 
     try {
-      const compressedDataUrl = await compressImage(file);
-      if (compressedDataUrl.length > 900000) {
-        alert("圖片過大，建議使用連結。");
-        setIsUploading(false);
-        return;
+      // 優先使用 Storage，若失敗則回退到 Base64 壓縮
+      let imageUrl;
+      try {
+        imageUrl = await uploadImageToStorage(file);
+      } catch (err) {
+        console.warn("Storage upload failed, fallback to compression", err);
+        imageUrl = await compressImage(file);
+        if (imageUrl.length > 900000) {
+            throw new Error("Image too large");
+        }
       }
+
       await addDoc(collection(db, "messages"), {
         commissionId,
-        image: compressedDataUrl, 
+        image: imageUrl, 
         sender: currentUser.name,
         role: currentUser.role,
         createdAt: new Date().toISOString(),
@@ -166,7 +195,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
       });
     } catch (error) {
       console.error("Upload failed", error);
-      alert("圖片處理失敗");
+      alert("圖片上傳失敗，請試著使用較小的圖片");
     } finally {
       setIsUploading(false); 
       if (fileInputRef.current) fileInputRef.current.value = null; 
@@ -174,7 +203,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
   };
 
   return (
-    <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-2xl overflow-hidden border border-slate-200`}>
+    <div className={`flex flex-col bg-slate-50 relative ${heightClass} rounded-xl md:rounded-2xl overflow-hidden border border-slate-200`}>
         {previewImage && (
           <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setPreviewImage(null)}>
             <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><X size={32} /></button>
@@ -184,14 +213,14 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
         {isUploading && (
           <div className="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center text-blue-600 backdrop-blur-sm">
             <Loader2 size={32} className="animate-spin mb-2" />
-            <p className="text-xs font-black uppercase tracking-widest">Processing...</p>
+            <p className="text-xs font-black uppercase tracking-widest">Uploading...</p>
           </div>
         )}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/50">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 opacity-50">
-                <MessageCircle size={40} strokeWidth={1.5} />
-                <p className="text-xs font-bold uppercase tracking-widest">開始討論吧！</p>
+                <MessageCircle size={32} strokeWidth={1.5} />
+                <p className="text-[10px] font-bold uppercase tracking-widest">開始討論吧！</p>
             </div>
           ) : (
             messages.map(msg => {
@@ -200,7 +229,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
                   {msg.type === 'image' ? (
                     <div className={`p-1 rounded-2xl border-2 shadow-sm ${isMe ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                      <img src={msg.image} alt="sent" className="max-w-[150px] md:max-w-[200px] max-h-[200px] md:max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setPreviewImage(msg.image)} />
+                      <img src={msg.image} alt="sent" className="max-w-[120px] md:max-w-[200px] max-h-[150px] md:max-h-[300px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setPreviewImage(msg.image)} />
                     </div>
                   ) : (
                     <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs md:text-sm font-bold shadow-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>{msg.text}</div>
@@ -214,7 +243,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
         </div>
         <div className="p-2 bg-white border-t border-slate-100 flex gap-2 shrink-0 items-end">
           <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
-          <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={20} /></button>
+          <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 hover:text-slate-700 transition-all active:scale-95" disabled={isUploading}><ImageIcon size={18} /></button>
           <div className="flex-1 relative"><input className="w-full bg-slate-100 border-none rounded-xl pl-3 pr-3 py-2 text-xs md:text-sm font-bold outline-none text-slate-700 placeholder:text-slate-400 transition-all focus:bg-white focus:ring-2 focus:ring-blue-100" placeholder="輸入訊息..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }} /></div>
           <button type="button" onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none active:scale-95" disabled={!inputText.trim() || isUploading}><Send size={18} /></button>
         </div>
@@ -222,7 +251,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80" }) =
   );
 };
 
-// --- Messenger (維持原樣) ---
+// --- Messenger ---
 const Messenger = ({ commissions, currentUser }) => {
   const [selectedCommId, setSelectedCommId] = useState(null);
   const selectedCommission = commissions.find(c => c.id === selectedCommId);
@@ -283,7 +312,207 @@ const Messenger = ({ commissions, currentUser }) => {
   );
 };
 
-// --- 委託人儀表板 (升級版：含分類過濾) ---
+// --- 主應用程式 ---
+const App = () => {
+  const [view, setView] = useState('login'); 
+  const [currentUser, setCurrentUser] = useState(null); 
+  const [commissions, setCommissions] = useState([]); 
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+  const [artistSettings, setArtistSettings] = useState({ password: 'admin', paymentInfo: '' });
+  const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsubComms = onSnapshot(query(collection(db, "commissions"), orderBy("updatedAt", "desc")), (snapshot) => {
+      setCommissions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+    });
+    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      setRegisteredUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      setLoading(false);
+    });
+    const unsubSettings = onSnapshot(doc(db, "settings", "admin_config"), (docSnap) => {
+      if (docSnap.exists()) setArtistSettings(docSnap.data());
+      else setDoc(doc(db, "settings", "admin_config"), { password: 'admin', paymentInfo: '' });
+    });
+    return () => { unsubComms(); unsubUsers(); unsubSettings(); };
+  }, []);
+
+  const showNotification = (msg, type = 'success') => {
+    setNotification({ msg, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleAuth = async (action, data) => {
+    if (action === 'artist') {
+      if (data.password === artistSettings.password) {
+        setCurrentUser({ name: '管理員', role: 'artist' });
+        setView('artist');
+      } else showNotification('管理密碼錯誤', 'error');
+      return;
+    }
+    
+    // 修復：匿名查詢邏輯 - 允許查詢該編號+密碼對應的所有委託
+    if (action === 'anonymous_track') {
+      // 先找一筆符合的來驗證身分
+      const target = commissions.find(c => c.code === data.code && c.password === data.password);
+      if (target) {
+        // 設定 currentUser，重點是記住 code，以便 Dashboard 篩選
+        setCurrentUser({ 
+            name: target.name, 
+            role: 'client', 
+            isAnonymous: true, 
+            code: data.code // 綁定編號
+        });
+        setView('client');
+      } else {
+        showNotification('編號或查詢密碼錯誤，或尚無此委託', 'error');
+      }
+      return;
+    }
+
+    if (action === 'forgot_password') {
+      const userRef = doc(db, "users", data.name);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) { showNotification('查無此會員名稱', 'error'); return; }
+      const validCommission = commissions.find(c => c.userName === data.name && c.code === data.code);
+      if (validCommission) {
+        showNotification('身分驗證成功！請立即重設密碼');
+        setCurrentUser({ name: data.name, role: 'client', mustResetPassword: true });
+        setView('client');
+      } else showNotification('驗證失敗', 'error');
+      return;
+    }
+    const userRef = doc(db, "users", data.name);
+    const userSnap = await getDoc(userRef);
+    if (action === 'register') {
+      if (userSnap.exists()) showNotification('名稱已被註冊，請換一個', 'error');
+      else {
+        await setDoc(userRef, { name: data.name, password: data.password });
+        showNotification('註冊成功');
+        setCurrentUser({ name: data.name, role: 'client', isAnonymous: false });
+        setView('client');
+      }
+    } else if (action === 'login') {
+      if (userSnap.exists() && userSnap.data().password === data.password) {
+        setCurrentUser({ name: data.name, role: 'client', isAnonymous: false });
+        setView('client');
+      } else showNotification('名稱或密碼錯誤', 'error');
+    }
+  };
+
+  const handleForceReset = async (newPassword) => {
+    try {
+      await updateDoc(doc(db, "users", currentUser.name), { password: newPassword });
+      showNotification('密碼重設成功！請牢記新密碼');
+      setCurrentUser({ ...currentUser, mustResetPassword: false });
+    } catch (e) { showNotification('重設失敗', 'error'); }
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-500">雲端同步中...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
+      <style>{styles}</style>
+      {notification && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-2xl shadow-2xl border ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'} flex items-center gap-3 animate-in slide-in-from-top-4 backdrop-blur-md`}>
+          {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+          <span className="font-bold">{notification.msg}</span>
+        </div>
+      )}
+
+      {currentUser?.mustResetPassword && (
+        <div className="fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md p-6 md:p-10 shadow-2xl border-4 border-red-100">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><ShieldAlert size={32}/></div>
+              <h2 className="text-xl md:text-2xl font-black text-slate-800">安全警示：強制重設</h2>
+              <p className="text-slate-500 text-xs md:text-sm mt-2 font-bold">您透過救援編號登入，為確保帳號安全，<br/>請立即設定新的登入密碼。</p>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleForceReset(e.target.newPwd.value); }} className="space-y-2">
+              <InputBox label="設定新密碼"><input name="newPwd" type="password" autoComplete="new-password" required style={inputBaseStyle} placeholder="請輸入新密碼" /></InputBox>
+              <button type="submit" className="w-full py-3 md:py-4 bg-red-500 text-white font-black rounded-xl md:rounded-2xl shadow-xl hover:bg-red-600 transition-all mt-4">確認並更新密碼</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {view === 'login' && <LoginView onAuth={handleAuth} onAnonymousRequest={async (d) => {
+        try {
+          const newItem = { 
+            ...d, status: 'pending', updatedAt: new Date().toISOString(), isAnonymous: true, 
+            paymentType: d.paymentType || 'paid',
+            referenceImages: d.referenceImages || [], referenceImage: d.referenceImages?.[0] || '', 
+            items: { 
+              avatar: { active: d.type==='avatar', progress: 0, price: 0, payment: 'none' }, 
+              halfBody: { active: d.type==='halfBody', progress: 0, price: 0, payment: 'none' }, 
+              fullBody: { active: d.type==='fullBody', progress: 0, price: 0, payment: 'none' }, 
+              other: { active: d.type==='other', progress: 0, price: 0, payment: 'none' } 
+            }, 
+            timeline: [{ date: new Date().toISOString().split('T')[0], title: '匿名委託', desc: '已提交請求，編號：' + d.code }] 
+          };
+          await addDoc(collection(db, "commissions"), newItem);
+          showNotification('申請已送出！請記住編號：' + d.code);
+        } catch(e) { showNotification(e.message, 'error'); }
+      }} />}
+      
+      {view === 'client' && <ClientDashboard user={currentUser} allCommissions={commissions} artistPaymentInfo={artistSettings.paymentInfo} onLogout={() => { setView('login'); setCurrentUser(null); }} notify={showNotification} />}
+      
+      {view === 'artist' && <ArtistDashboard commissions={commissions} registeredUsers={registeredUsers} artistSettings={artistSettings} notify={showNotification} onLogout={() => { setView('login'); setCurrentUser(null); }} />}
+    </div>
+  );
+};
+
+// --- 1. 登入介面 ---
+const LoginView = ({ onAuth, onAnonymousRequest }) => {
+  const [activeTab, setActiveTab] = useState('login'); 
+  const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '', referenceImages: [], paymentType: 'paid' });
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleImageChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    if (formData.referenceImages.length + files.length > 5) { alert("參考圖最多 5 張"); return; }
+    setIsProcessing(true);
+    const newImages = [];
+    for (const file of files) {
+        try { 
+            // 嘗試上傳到 Storage，失敗則使用壓縮
+            let url;
+            try { url = await uploadImageToStorage(file); } 
+            catch { url = await compressImage(file); }
+            newImages.push(url); 
+        } catch (error) { alert("圖片處理失敗"); }
+    }
+    setFormData(prev => ({ ...prev, referenceImages: [...prev.referenceImages, ...newImages] }));
+    setIsProcessing(false);
+    e.target.value = null; 
+  };
+  const removeImage = (index) => setFormData(prev => ({ ...prev, referenceImages: prev.referenceImages.filter((_, i) => i !== index) }));
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-50 relative">
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-400/20 rounded-full blur-[100px] animate-pulse pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-300/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-6 md:p-8 border border-slate-200 relative z-10">
+        <div className="text-center mb-6"><div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-xl rotate-2"><Palette size={28}/></div><h1 className="text-xl md:text-2xl font-black">Commission<span className="text-blue-500">Hub</span></h1></div>
+        <div className="flex p-1 bg-slate-100 rounded-xl mb-6 overflow-x-auto no-scrollbar gap-1">{['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (<button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:'', referenceImages: [], paymentType: 'paid'})}} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap px-3 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}</button>))}</div>
+        <form onSubmit={(e)=>{ e.preventDefault(); if(activeTab === 'anonymous_req') onAnonymousRequest(formData); else onAuth(activeTab, formData); }} className="space-y-1 relative z-20"> 
+            {(activeTab === 'login' || activeTab === 'register') && (<><InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox></>)}
+            {activeTab === 'forgot_password' && (<div className="bg-orange-50 p-3 rounded-xl mb-3 border border-orange-100"><p className="text-xs text-orange-600 font-bold mb-3 flex items-center gap-1"><ShieldCheck size={14}/> 救援登入模式</p><InputBox label="會員名稱"><input required style={inputBaseStyle} placeholder="您的註冊名稱" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="驗證編號"><input required style={inputBaseStyle} placeholder="輸入您名下任一委託編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><p className="text-[10px] text-slate-400 mt-2 font-bold">* 驗證通過後需強制重設密碼</p></div>)}
+            {activeTab === 'anonymous_track' && (<><InputBox label="匿名編號"><input required style={inputBaseStyle} placeholder="您當初設定的編號" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="您的密碼" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox></>)}
+            {activeTab === 'anonymous_req' && (<div className="space-y-0 overflow-y-auto max-h-[50vh] p-1 custom-scrollbar">
+                <InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setFormData({...formData, paymentType: 'paid'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='paid'?'bg-white text-emerald-600 shadow-sm':'text-slate-400'}`}>💰 付費</button><button type="button" onClick={()=>setFormData({...formData, paymentType: 'free'})} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${formData.paymentType==='free'?'bg-white text-pink-500 shadow-sm':'text-slate-400'}`}>🎁 無償</button></div></InputBox>
+                <InputBox label="自訂查詢編號 (重要)"><input required style={inputBaseStyle} placeholder="例如：Tako001" value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} /></InputBox><InputBox label="設定查詢密碼"><input required type="password" autoComplete="new-password" style={inputBaseStyle} placeholder="日後登入查詢用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox><InputBox label="您的暱稱"><input required style={inputBaseStyle} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></InputBox><InputBox label="聯絡方式"><input required style={inputBaseStyle} placeholder="Discord / Email" value={formData.contact} onChange={e=>setFormData({...formData, contact: e.target.value})} /></InputBox><InputBox label="委託類別"><select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea style={{...inputBaseStyle, height: '60px', resize:'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox></div>)}
+            {activeTab === 'artist' && (<InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>)}
+            <button type="submit" className={`w-full py-3 md:py-4 text-white font-black rounded-xl md:rounded-2xl shadow-xl transition-all active:scale-95 text-base md:text-lg mt-4 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':activeTab==='forgot_password'?'bg-orange-500 shadow-orange-100':'bg-blue-600 shadow-blue-100'}`} disabled={isProcessing}>{activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : activeTab === 'forgot_password' ? '驗證並重設' : '進入後台'}</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- 2. 委託人儀表板 ---
 const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, notify }) => {
   const [viewMode, setViewMode] = useState('dashboard'); 
   const [selectedProject, setSelectedProject] = useState(null);
@@ -298,8 +527,10 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
   const [typeFilter, setTypeFilter] = useState('all');     // all, avatar, halfBody, fullBody, other
   const [searchQuery, setSearchQuery] = useState('');
   
+  // 修復：匿名查詢時，只要編號和密碼正確，就能看到所有符合條件的委託 (不再只是一筆)
+  // 如果是匿名用戶，user.code 是登入時輸入的編號
   const myCommissions = user.isAnonymous 
-    ? allCommissions.filter(c => c.id === user.targetId)
+    ? allCommissions.filter(c => c.code === user.code)
     : allCommissions.filter(c => c.userName === user.name);
 
   // 篩選邏輯
@@ -315,19 +546,20 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, onLogout, no
       if (statusFilter === 'pending') statusMatch = c.status === 'pending';
       else if (statusFilter === 'ongoing') statusMatch = c.status === 'waiting' || c.status === 'working';
       else if (statusFilter === 'done') statusMatch = c.status === 'done';
+      if (!statusMatch) return false;
 
       // 類型過濾
       let typeMatch = true;
       if (typeFilter !== 'all') typeMatch = c.type === typeFilter;
-
-      return statusMatch && typeMatch;
+      
+      return typeMatch;
     });
   }, [myCommissions, statusFilter, typeFilter, searchQuery]);
 
   const handleNewRequest = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const data = Object.fromEntries(fd); try { const newItem = { userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', paymentType: data.paymentType, updatedAt: new Date().toISOString(), referenceImages: newRequestImgs, items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }] }; await addDoc(collection(db, "commissions"), newItem); notify('委託申請已送出！'); setNewReqOpen(false); setNewRequestImgs([]); } catch(err) { notify('發送失敗', 'error'); } };
-  const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { const compressed = await compressImage(file); newImages.push(compressed); } catch (error) { alert("圖片處理失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
+  const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { let url; try { url = await uploadImageToStorage(file); } catch { url = await compressImage(file); } newImages.push(url); } catch (error) { alert("圖片處理失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
   const handleChangePassword = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd } = Object.fromEntries(fd); try { const userRef = doc(db, "users", user.name); const userSnap = await getDoc(userRef); if (userSnap.exists() && userSnap.data().password === oldPwd) { await updateDoc(userRef, { password: newPwd }); notify('密碼修改成功！'); setSettingsOpen(false); } else notify('舊密碼錯誤', 'error'); } catch(e) { notify('修改失敗', 'error'); } };
-  const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { const compressed = await compressImage(file); if (compressed.length > 900000) { alert("圖片過大"); return; } await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: compressed }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: compressed })); } catch (err) { notify('上傳失敗', 'error'); } };
+  const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { let compressed; try { compressed = await uploadImageToStorage(file); } catch { compressed = await compressImage(file); } await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: compressed }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: compressed })); } catch (err) { notify('上傳失敗', 'error'); } };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
