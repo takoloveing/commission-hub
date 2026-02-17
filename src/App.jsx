@@ -10,22 +10,22 @@ import {
   BarChart3, Copy, Eye
 } from 'lucide-react';
 
-// --- 改回標準 NPM 引用 (最穩定) ---
-import { initializeApp } from 'firebase/app';
+// --- 改回 CDN 引用 (解決 Vercel 白畫面問題) ---
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
   doc, onSnapshot, query, orderBy, setDoc, getDoc, where 
-} from 'firebase/firestore';
+} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { 
   getStorage, ref, uploadBytes, getDownloadURL 
-} from 'firebase/storage';
+} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
 
-// ⚠️ 您的 Firebase 設定 (已根據截圖填入正確 bucket)
+// ⚠️ 您的 Firebase 設定
 const firebaseConfig = {
   apiKey: "AIzaSyCeHj5Kc6E_ltyXboL7cWSpFClq4FrCrvU",
   authDomain: "commission-hub-cc739.firebaseapp.com",
   projectId: "commission-hub-cc739",
-  storageBucket: "commission-hub-cc739.firebasestorage.app", // 這是您截圖中的正確位置
+  storageBucket: "commission-hub-cc739.firebasestorage.app",
   messagingSenderId: "1022991297741",
   appId: "1:1022991297741:web:df716fcd268c0d9d2c8d84"
 };
@@ -43,7 +43,7 @@ try {
   console.error("Firebase Init Error:", error);
 }
 
-// --- 圖片壓縮工具 (備用) ---
+// --- 圖片壓縮工具 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -79,12 +79,22 @@ const uploadImageToStorage = async (file) => {
   return await getDownloadURL(storageRef);
 };
 
+// --- 智慧上傳 (自動切換) ---
+const smartUpload = async (file) => {
+    try {
+        return await uploadImageToStorage(file);
+    } catch (e) {
+        console.warn("Storage upload failed, using fallback", e);
+        return await compressImage(file);
+    }
+}
+
 // --- 樣式組件：方框容器 ---
 const InputBox = ({ label, children, style = {} }) => (
   <div style={{
     backgroundColor: '#ffffff',
     border: '2px solid #cbd5e1',
-    borderRadius: '12px', // 手機優化：圓角縮小
+    borderRadius: '12px',
     padding: '12px 14px',
     marginBottom: '14px',
     display: 'flex',
@@ -181,9 +191,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80", sta
 
     setIsUploading(true); 
     try {
-      // 嘗試上傳到 Storage (您已成功啟用)
-      const imageUrl = await uploadImageToStorage(file);
-
+      const imageUrl = await smartUpload(file);
       await addDoc(collection(db, "messages"), {
         commissionId,
         image: imageUrl, 
@@ -193,8 +201,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80", sta
         type: 'image'
       });
     } catch (error) {
-      console.error("Upload failed", error);
-      alert("圖片上傳失敗，請稍後再試");
+      alert("圖片上傳失敗");
     } finally {
       setIsUploading(false); 
       if (fileInputRef.current) fileInputRef.current.value = null; 
@@ -315,25 +322,6 @@ const Messenger = ({ commissions, currentUser }) => {
       </div>
     </div>
   );
-};
-
-// --- ArtistStats ---
-const ArtistStats = ({ commissions }) => {
-    const stats = useMemo(() => {
-        const pending = commissions.filter(c => c.status === 'pending').length;
-        const working = commissions.filter(c => ['waiting', 'working'].includes(c.status)).length;
-        const done = commissions.filter(c => c.status === 'done').length;
-        const earnings = commissions.filter(c => c.status !== 'declined' && c.status !== 'pending' && c.paymentType !== 'free').reduce((acc, curr) => acc + (parseInt(curr.items[curr.type]?.price) || 0), 0);
-        return { pending, working, done, earnings };
-    }, [commissions]);
-    return (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center"><div className="w-10 h-10 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mb-2"><FileQuestion size={20}/></div><span className="text-2xl font-black text-slate-800">{stats.pending}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">待審核</span></div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center"><div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-2"><Activity size={20}/></div><span className="text-2xl font-black text-slate-800">{stats.working}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">進行中</span></div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center"><div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2"><CheckCircle2 size={20}/></div><span className="text-2xl font-black text-slate-800">{stats.done}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">已完成</span></div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center"><div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-2"><DollarSign size={20}/></div><span className="text-xl md:text-2xl font-black text-slate-800">${stats.earnings.toLocaleString()}</span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">預估收益</span></div>
-        </div>
-    );
 };
 
 // --- App ---
@@ -508,7 +496,7 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos }) => {
     const newImages = [];
     for (const file of files) {
         try { 
-            const url = await uploadImageToStorage(file);
+            const url = await smartUpload(file);
             newImages.push(url); 
         } catch (error) { alert("圖片上傳失敗"); }
     }
@@ -626,9 +614,9 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
   }, [myCommissions, statusFilter, typeFilter, searchQuery, sortOrder]);
 
   const handleNewRequest = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const data = Object.fromEntries(fd); try { const newItem = { userName: user.name, name: user.name, contact: data.contact, desc: data.desc, type: data.type, code: 'PENDING', status: 'pending', paymentType: data.paymentType, updatedAt: new Date().toISOString(), referenceImages: newRequestImgs, items: { avatar: { active: data.type==='avatar', progress: 0, price: 0, payment: 'none' }, halfBody: { active: data.type==='halfBody', progress: 0, price: 0, payment: 'none' }, fullBody: { active: data.type==='fullBody', progress: 0, price: 0, payment: 'none' }, other: { active: data.type==='other', progress: 0, price: 0, payment: 'none' } }, timeline: [{ date: new Date().toISOString().split('T')[0], title: '申請成功', desc: '已提交新委託請求' }] }; await addDoc(collection(db, "commissions"), newItem); notify('委託申請已送出！'); setNewReqOpen(false); setNewRequestImgs([]); } catch(err) { notify('發送失敗', 'error'); } };
-  const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { const url = await uploadImageToStorage(file); newImages.push(url); } catch (error) { alert("圖片上傳失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
+  const handleImageChange = async (e) => { const files = Array.from(e.target.files); if (!files.length) return; setIsProcessing(true); const newImages = []; for (const file of files) { try { const url = await smartUpload(file); newImages.push(url); } catch (error) { alert("圖片上傳失敗"); } } setNewRequestImgs(prev => [...prev, ...newImages]); setIsProcessing(false); e.target.value = null; };
   const handleChangePassword = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd } = Object.fromEntries(fd); try { const userRef = doc(db, "users", user.name); const userSnap = await getDoc(userRef); if (userSnap.exists() && userSnap.data().password === oldPwd) { await updateDoc(userRef, { password: newPwd }); notify('密碼修改成功！'); setSettingsOpen(false); } else notify('舊密碼錯誤', 'error'); } catch(e) { notify('修改失敗', 'error'); } };
-  const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { const url = await uploadImageToStorage(file); await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: url }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: url })); } catch (err) { notify('上傳失敗', 'error'); } };
+  const handleUploadPaymentProof = async (e) => { const file = e.target.files[0]; if (!file) return; try { const url = await smartUpload(file); await updateDoc(doc(db, "commissions", selectedProject.id), { paymentProof: url }); notify('匯款證明上傳成功！'); setSelectedProject(prev => ({ ...prev, paymentProof: url })); } catch (err) { notify('上傳失敗', 'error'); } };
   const toggleSort = () => { const nextSort = { 'date_desc': 'date_asc', 'date_asc': 'name_asc', 'name_asc': 'name_desc', 'name_desc': 'date_desc' }; setSortOrder(nextSort[sortOrder]); };
 
   return (
@@ -723,7 +711,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
       {/* ... (Settings modal hidden) ... */}
       {isSettingsOpen && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-white"><h2 className="text-xl font-black mb-6 flex items-center gap-2"><Lock size={20}/> 修改帳戶密碼</h2><form onSubmit={handleChangePassword} className="space-y-2"><InputBox label="目前舊密碼"><input name="oldPwd" type="password" required style={inputBaseStyle} /></InputBox><InputBox label="設定新密碼"><input name="newPwd" type="password" required style={inputBaseStyle} /></InputBox><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setSettingsOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">取消</button><button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg">確認修改</button></div></form></div></div>)}
       {/* ... (New Request modal hidden) ... */}
-      {isNewReqOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[1.5rem] w-[95%] md:w-full max-w-md p-6 md:p-8 shadow-2xl border border-white my-4"><div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-xl md:text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2><button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button></div><form onSubmit={handleNewRequest} className="space-y-2"><InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox><InputBox label="委託類別"><select name="type" style={inputBaseStyle} className="cursor-pointer"><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setNewRequestImgs(prev=>({...prev, paymentType: 'paid'}))} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all bg-white text-emerald-600 shadow-sm`}>💰 付費</button><button type="button" className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all text-slate-400`}>無償 (需選擇)</button></div><div className="flex gap-2 mt-1"><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="paid" defaultChecked className="accent-blue-600"/> <span className="text-xs font-bold text-slate-600">付費委託</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="free" className="accent-pink-500"/> <span className="text-xs font-bold text-slate-600">無償/贈圖</span></label></div></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${newRequestImgs.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${newRequestImgs.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={newRequestImgs.length >= 5 || isProcessing} /></label>{newRequestImgs.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{newRequestImgs.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => setNewRequestImgs(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '80px', resize: 'none'}} /></InputBox><button type="submit" className="w-full py-4 bg-pink-500 text-white font-black rounded-xl shadow-xl hover:bg-pink-600 mt-4" disabled={isProcessing}>送出請求</button></form></div></div>)}
+      {isNewReqOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[1.5rem] w-[95%] md:w-full max-w-md p-6 md:p-8 shadow-2xl border border-white my-4"><div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-xl md:text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2><button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button></div><form onSubmit={handleNewRequest} className="space-y-2"><InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox><InputBox label="委託類別"><select name="type" style={inputBaseStyle} className="cursor-pointer"><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select></InputBox><InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setNewRequestImgs(prev=>({...prev, paymentType: 'paid'}))} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all bg-white text-emerald-600 shadow-sm`}>💰 付費</button><button type="button" className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all text-slate-400`}>無償 (需選擇)</button></div><div className="flex gap-2 mt-1"><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="paid" defaultChecked className="accent-blue-600"/> <span className="text-xs font-bold text-slate-600">付費委託</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="free" className="accent-pink-500"/> <span className="text-xs font-bold text-slate-600">無償/贈圖</span></label></div></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${newRequestImgs.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${newRequestImgs.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={newRequestImgs.length >= 5 || isProcessing} /></label>{newRequestImgs.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{newRequestImgs.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => setNewRequestImgs(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '80px', resize: 'none'}} /></InputBox><div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4"><p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{tos || "請遵守委託相關規定。"}</p><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="accent-blue-600" checked={agreeTOS} onChange={e=>setAgreeTOS(e.target.checked)} /><span className="text-xs font-bold text-slate-700">我已閱讀並同意服務條款</span></label></div><button type="submit" className={`w-full py-4 bg-pink-500 text-white font-black rounded-xl shadow-xl hover:bg-pink-600 mt-4 ${!agreeTOS && 'opacity-50 cursor-not-allowed'}`} disabled={isProcessing || !agreeTOS}>送出請求</button></form></div></div>)}
     </div>
   );
 };
@@ -732,8 +720,54 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
 const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   // ... (State logic same as before) ...
   const [activeMainTab, setActiveMainTab] = useState('commissions'); const [subTab, setSubTab] = useState('all'); const [searchQuery, setSearchQuery] = useState(''); const [editItem, setEditItem] = useState(null); const [selectedUserDetail, setSelectedUserDetail] = useState(null); const [isSettingsOpen, setSettingsOpen] = useState(false); const [previewImage, setPreviewImage] = useState(null);
-  const filteredAll = useMemo(() => { return commissions.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.code.toLowerCase().includes(searchQuery.toLowerCase()) || (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))); }, [commissions, searchQuery]);
-  const requestsList = filteredAll.filter(c => c.status === 'pending'); const ongoingList = filteredAll.filter(c => c.status !== 'pending' && c.status !== 'done'); const getSubFiltered = (list) => subTab === 'all' ? list : list.filter(c => c.type === subTab);
+  
+  // 新增：後台的排序與狀態過濾
+  const [sortOrder, setSortOrder] = useState('date_desc'); 
+  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done (用於委託類 tab)
+
+  const filteredAll = useMemo(() => { 
+      let result = commissions.filter(c => 
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+
+      // 排序
+      result.sort((a, b) => {
+        if (sortOrder === 'date_desc') return new Date(b.updatedAt) - new Date(a.updatedAt);
+        if (sortOrder === 'date_asc') return new Date(a.updatedAt) - new Date(b.updatedAt);
+        if (sortOrder === 'name_asc') return a.name.localeCompare(b.name);
+        if (sortOrder === 'name_desc') return b.name.localeCompare(a.name);
+        return 0;
+      });
+
+      return result;
+  }, [commissions, searchQuery, sortOrder]);
+
+  const requestsList = filteredAll.filter(c => c.status === 'pending');
+  // 修改：委託類現在包含 done，並支援 statusFilter
+  const commissionsList = filteredAll.filter(c => c.status !== 'pending');
+  
+  const getDisplayList = () => {
+      let list = activeMainTab === 'commissions' ? commissionsList : requestsList;
+      
+      // 狀態二次過濾 (僅在委託類 tab 有效)
+      if (activeMainTab === 'commissions' && statusFilter !== 'all') {
+          if (statusFilter === 'ongoing') list = list.filter(c => c.status === 'waiting' || c.status === 'working');
+          else list = list.filter(c => c.status === statusFilter);
+      }
+
+      // 類型過濾
+      if (subTab !== 'all') list = list.filter(c => c.type === subTab);
+      
+      return list;
+  };
+
+  const toggleSort = () => {
+    const nextSort = { 'date_desc': 'date_asc', 'date_asc': 'name_asc', 'name_asc': 'name_desc', 'name_desc': 'date_desc' };
+    setSortOrder(nextSort[sortOrder]);
+  };
+
   const handleUpdateSettings = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd, paymentInfo } = Object.fromEntries(fd); if (oldPwd && oldPwd !== artistSettings.password) { notify('舊密碼錯誤', 'error'); return; } const updateData = { paymentInfo }; if(newPwd) updateData.password = newPwd; try { await updateDoc(doc(db, "settings", "admin_config"), updateData); notify('設定更新成功！'); setSettingsOpen(false); } catch(e) { notify('更新失敗', 'error'); } };
 
   return (
