@@ -10,7 +10,7 @@ import {
   BarChart3, Copy, Eye, Power
 } from 'lucide-react';
 
-// --- Firebase 標準引入 ---
+// --- 改回標準 NPM 引用 (解決 Dynamic require 錯誤) ---
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
@@ -157,7 +157,7 @@ const ChatRoom = ({ commissionId, currentUser, heightClass = "h-64 md:h-80", sta
     const q = query(collection(db, "messages"), where("commissionId", "==", commissionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      msgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      msgs.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
@@ -220,11 +220,11 @@ const Messenger = ({ commissions, currentUser }) => {
       <div className={`w-full md:w-80 bg-slate-50 border-r border-slate-100 flex flex-col ${selectedCommId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 md:p-6 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10"><h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-500"/> 聊天列表</h2></div>
         <div className="overflow-y-auto flex-1 p-2 md:p-3 space-y-2 custom-scrollbar">
-            {commissions.length > 0 ? commissions.map(c => (<button key={c.id} onClick={() => setSelectedCommId(c.id)} className={`w-full text-left p-3 md:p-4 rounded-xl md:rounded-2xl transition-all border-2 group relative overflow-hidden ${selectedCommId === c.id ? 'bg-white border-blue-500 shadow-md' : 'bg-white border-transparent hover:border-blue-200 hover:shadow-sm'}`}><div className="flex justify-between items-start mb-1"><span className={`font-black text-xs md:text-sm ${selectedCommId === c.id ? 'text-blue-600' : 'text-slate-700'}`}>{currentUser.role === 'artist' ? c.name : '繪師'}</span><span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">#{c.code}</span></div><div className="text-[10px] md:text-xs font-bold text-slate-400 truncate">{c.type} • {getStatusLabel(c.status)}</div></button>)) : (<div className="text-center p-8 text-slate-400 text-xs font-bold">沒有進行中的對話</div>)}
+            {commissions.length > 0 ? commissions.map(c => (<button key={c.id} onClick={() => setSelectedCommId(c.id)} className={`w-full text-left p-3 md:p-4 rounded-xl md:rounded-2xl transition-all border-2 group relative overflow-hidden ${selectedCommId === c.id ? 'bg-white border-blue-500 shadow-md' : 'bg-white border-transparent hover:border-blue-200 hover:shadow-sm'}`}><div className="flex justify-between items-start mb-1"><span className={`font-black text-xs md:text-sm ${selectedCommId === c.id ? 'text-blue-600' : 'text-slate-700'}`}>{currentUser.role === 'artist' ? c.name || '未知' : '繪師'}</span><span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">#{c.code}</span></div><div className="text-[10px] md:text-xs font-bold text-slate-400 truncate">{c.type} • {getStatusLabel(c.status)}</div></button>)) : (<div className="text-center p-8 text-slate-400 text-xs font-bold">沒有進行中的對話</div>)}
         </div>
       </div>
       <div className={`flex-1 flex flex-col bg-white ${!selectedCommId ? 'hidden md:flex' : 'flex'} w-full md:w-auto absolute md:relative inset-0 md:inset-auto z-20`}>
-        {selectedCommission ? (<><div className="p-3 md:p-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-30 shadow-sm"><div className="flex items-center gap-3"><button onClick={() => setSelectedCommId(null)} className="md:hidden p-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft size={20}/></button><div><h3 className="font-black text-slate-800 text-sm md:text-base">{currentUser.role === 'artist' ? selectedCommission.name : '繪師'} <span className="text-slate-400 font-bold ml-2 text-xs">#{selectedCommission.code}</span></h3><span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{selectedCommission.type}</span></div></div></div><div className="flex-1 overflow-hidden relative"><ChatRoom commissionId={selectedCommId} currentUser={currentUser} heightClass="h-full border-none rounded-none" status={selectedCommission.status} /></div></>) : (<div className="hidden md:flex flex-col items-center justify-center h-full text-slate-300 gap-4"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><MessageSquare size={24} /></div><p className="font-black text-xs uppercase tracking-widest">請從左側選擇一個對話</p></div>)}
+        {selectedCommission ? (<><div className="p-3 md:p-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-30 shadow-sm"><div className="flex items-center gap-3"><button onClick={() => setSelectedCommId(null)} className="md:hidden p-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft size={20}/></button><div><h3 className="font-black text-slate-800 text-sm md:text-base">{currentUser.role === 'artist' ? selectedCommission.name || '未知' : '繪師'} <span className="text-slate-400 font-bold ml-2 text-xs">#{selectedCommission.code}</span></h3><span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{selectedCommission.type}</span></div></div></div><div className="flex-1 overflow-hidden relative"><ChatRoom commissionId={selectedCommId} currentUser={currentUser} heightClass="h-full border-none rounded-none" status={selectedCommission.status} /></div></>) : (<div className="hidden md:flex flex-col items-center justify-center h-full text-slate-300 gap-4"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><MessageSquare size={24} /></div><p className="font-black text-xs uppercase tracking-widest">請從左側選擇一個對話</p></div>)}
       </div>
     </div>
   );
@@ -236,7 +236,8 @@ const ArtistStats = ({ commissions }) => {
         const pending = commissions.filter(c => c.status === 'pending').length;
         const working = commissions.filter(c => ['waiting', 'working'].includes(c.status)).length;
         const done = commissions.filter(c => c.status === 'done').length;
-        const earnings = commissions.filter(c => c.status !== 'declined' && c.status !== 'pending' && c.paymentType !== 'free').reduce((acc, curr) => acc + (parseInt(curr.items[curr.type]?.price) || 0), 0);
+        // 安全檢查: 確保 price 存在
+        const earnings = commissions.filter(c => c.status !== 'declined' && c.status !== 'pending' && c.paymentType !== 'free').reduce((acc, curr) => acc + (parseInt(curr.items?.[curr.type]?.price || 0)), 0);
         return { pending, working, done, earnings };
     }, [commissions]);
     return (
@@ -288,7 +289,7 @@ const App = () => {
   const showNotification = (msg, type = 'success') => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 3000); };
   const handleAuth = async (action, data) => {
     if (action === 'artist') { if (data.password === artistSettings.password) { setCurrentUser({ name: '管理員', role: 'artist' }); setView('artist'); } else showNotification('管理密碼錯誤', 'error'); return; }
-    if (action === 'anonymous_track') { const target = commissions.find(c => c.code === data.code && c.password === data.password); if (target) { setCurrentUser({ name: target.name, role: 'client', isAnonymous: true, code: data.code }); setView('client'); } else showNotification('編號或查詢密碼錯誤，或尚無此委託', 'error'); return; }
+    if (action === 'anonymous_track') { const target = commissions.find(c => c.code === data.code && c.password === data.password); if (target) { setCurrentUser({ name: target.name || '匿名用戶', role: 'client', isAnonymous: true, code: data.code }); setView('client'); } else showNotification('編號或查詢密碼錯誤，或尚無此委託', 'error'); return; }
     if (action === 'forgot_password') { const userRef = doc(db, "users", data.name); const userSnap = await getDoc(userRef); if (!userSnap.exists()) { showNotification('查無此會員名稱', 'error'); return; } const validCommission = commissions.find(c => c.userName === data.name && c.code === data.code); if (validCommission) { showNotification('身分驗證成功！請立即重設密碼'); setCurrentUser({ name: data.name, role: 'client', mustResetPassword: true }); setView('client'); } else showNotification('驗證失敗', 'error'); return; }
     const userRef = doc(db, "users", data.name); const userSnap = await getDoc(userRef);
     if (action === 'register') { if (userSnap.exists()) showNotification('名稱已被註冊，請換一個', 'error'); else { await setDoc(userRef, { name: data.name, password: data.password }); showNotification('註冊成功'); setCurrentUser({ name: data.name, role: 'client', isAnonymous: false }); setView('client'); } } 
@@ -329,7 +330,6 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos, exampleI
         <div className="text-center mb-6"><div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-xl rotate-2"><Palette size={28}/></div><h1 className="text-xl md:text-2xl font-black">Commission<span className="text-blue-500">Hub</span></h1><div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isCommissionOpen ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'}`}><div className={`w-2 h-2 rounded-full ${isCommissionOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>{isCommissionOpen ? 'OPEN / 接單中' : 'CLOSED / 暫停接單'}</div></div>
         <div className="flex p-1 bg-slate-100 rounded-xl mb-6 overflow-x-auto no-scrollbar gap-1">{['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (<button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:'', referenceImages: [], paymentType: 'paid'})}} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap px-3 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}</button>))}</div>
         
-        {/* 如果暫停接單且選中匿名委託，顯示警告 */}
         {!isCommissionOpen && activeTab === 'anonymous_req' ? (
             <div className="text-center p-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                 <Ban size={48} className="mx-auto text-slate-300 mb-4" />
@@ -380,6 +380,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
   const [previewImage, setPreviewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [agreeTOS, setAgreeTOS] = useState(false);
+  
   // 關鍵修復：補回這兩個狀態
   const [showExamples, setShowExamples] = useState(false); 
   const [reqType, setReqType] = useState('avatar'); 
@@ -452,7 +453,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
         ) : (<Messenger commissions={myCommissions} currentUser={user} />)}
       </main>
       
-      {/* 委託詳情彈窗 */}
+      {/* 委託詳情與設定彈窗 (省略) */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-hidden">
             <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] w-[95%] md:w-full max-w-xl p-5 md:p-10 shadow-2xl relative border border-white my-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
