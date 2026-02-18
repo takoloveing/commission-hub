@@ -7,10 +7,10 @@ import {
   Wallet, ShieldCheck, Camera, History, FileText, Download, Cloud,
   Mail, Send, FileQuestion, Key, Settings, UserPlus, List, Search, Users, Inbox, Menu, ShieldAlert,
   MessageSquare, ArrowLeft, Paperclip, Loader2, Link, UploadCloud, Banknote, Gift, Filter, ArrowDownUp, Calendar, Type, Ban,
-  BarChart3, Copy, Eye
+  BarChart3, Copy, Eye, Power
 } from 'lucide-react';
 
-// --- 改回標準 NPM 引用 (最穩定，解決 Vercel 白畫面) ---
+// --- 改回標準 NPM 引用 (最穩定) ---
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
@@ -43,8 +43,8 @@ try {
   console.error("Firebase Init Error:", error);
 }
 
-// --- 範例圖設定 (全域變數) ---
-const EXAMPLE_IMAGES = {
+// --- 範例圖設定 (預設值) ---
+const DEFAULT_EXAMPLE_IMAGES = {
   avatar: ["https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400","https://images.unsplash.com/photo-1554151228-14d9def656ec?w=400"],
   halfBody: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400","https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"],
   fullBody: ["https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400","https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400"],
@@ -331,7 +331,7 @@ const Messenger = ({ commissions, currentUser }) => {
   );
 };
 
-// --- ArtistStats (補回統計功能) ---
+// --- ArtistStats ---
 const ArtistStats = ({ commissions }) => {
     const stats = useMemo(() => {
         const pending = commissions.filter(c => c.status === 'pending').length;
@@ -356,7 +356,13 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState(null); 
   const [commissions, setCommissions] = useState([]); 
   const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [artistSettings, setArtistSettings] = useState({ password: 'admin', paymentInfo: '', tos: '尚無服務條款', isOpen: true }); 
+  const [artistSettings, setArtistSettings] = useState({ 
+      password: 'admin', 
+      paymentInfo: '', 
+      tos: '尚無服務條款', 
+      isOpen: true,
+      exampleImages: DEFAULT_EXAMPLE_IMAGES // 預設值
+  }); 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -370,8 +376,22 @@ const App = () => {
       setLoading(false);
     });
     const unsubSettings = onSnapshot(doc(db, "settings", "admin_config"), (docSnap) => {
-      if (docSnap.exists()) setArtistSettings(docSnap.data());
-      else setDoc(doc(db, "settings", "admin_config"), { password: 'admin', paymentInfo: '', tos: '', isOpen: true });
+      if (docSnap.exists()) {
+          const data = docSnap.data();
+          // 合併資料，確保 exampleImages 有值
+          setArtistSettings({
+              ...data,
+              exampleImages: data.exampleImages || DEFAULT_EXAMPLE_IMAGES
+          });
+      } else {
+          setDoc(doc(db, "settings", "admin_config"), { 
+              password: 'admin', 
+              paymentInfo: '', 
+              tos: '', 
+              isOpen: true,
+              exampleImages: DEFAULT_EXAMPLE_IMAGES
+          });
+      }
     });
     return () => { unsubComms(); unsubUsers(); unsubSettings(); };
   }, []);
@@ -489,9 +509,9 @@ const App = () => {
           await addDoc(collection(db, "commissions"), newItem);
           showNotification('申請已送出！請記住編號：' + d.code);
         } catch(e) { showNotification(e.message, 'error'); }
-      }} tos={artistSettings.tos} />}
+      }} tos={artistSettings.tos} exampleImages={artistSettings.exampleImages} />}
       
-      {view === 'client' && <ClientDashboard user={currentUser} allCommissions={commissions} artistPaymentInfo={artistSettings.paymentInfo} isCommissionOpen={artistSettings.isOpen} tos={artistSettings.tos} onLogout={() => { setView('login'); setCurrentUser(null); }} notify={showNotification} />}
+      {view === 'client' && <ClientDashboard user={currentUser} allCommissions={commissions} artistPaymentInfo={artistSettings.paymentInfo} isCommissionOpen={artistSettings.isOpen} tos={artistSettings.tos} exampleImages={artistSettings.exampleImages} onLogout={() => { setView('login'); setCurrentUser(null); }} notify={showNotification} />}
       
       {view === 'artist' && <ArtistDashboard commissions={commissions} registeredUsers={registeredUsers} artistSettings={artistSettings} notify={showNotification} onLogout={() => { setView('login'); setCurrentUser(null); }} />}
     </div>
@@ -499,7 +519,7 @@ const App = () => {
 };
 
 // --- 1. 登入介面 ---
-const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos }) => {
+const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos, exampleImages }) => {
   const [activeTab, setActiveTab] = useState('login'); 
   const [formData, setFormData] = useState({ name: '', password: '', code: '', contact: '', type: 'avatar', desc: '', referenceImages: [], paymentType: 'paid' });
   const [isProcessing, setIsProcessing] = useState(false);
@@ -558,7 +578,7 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos }) => {
                     <InputBox label="委託類別">
                       <select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select>
                       <button type="button" onClick={()=>setShowExamples(!showExamples)} className="text-[10px] text-blue-500 font-bold mt-2 flex items-center gap-1 hover:text-blue-600"><ImageIcon size={12}/> {showExamples ? '隱藏範例' : '查看範例圖'}</button>
-                      {showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{EXAMPLE_IMAGES[formData.type]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}
+                      {showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{exampleImages[formData.type]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}
                     </InputBox>
                     <InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '60px', resize: 'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
                     
@@ -582,7 +602,7 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos }) => {
 };
 
 // --- 2. 委託人儀表板 ---
-const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommissionOpen, tos, onLogout, notify }) => {
+const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommissionOpen, tos, exampleImages, onLogout, notify }) => {
   const [viewMode, setViewMode] = useState('dashboard'); 
   const [selectedProject, setSelectedProject] = useState(null);
   const [isNewReqOpen, setNewReqOpen] = useState(false);
@@ -591,6 +611,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
   const [previewImage, setPreviewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [agreeTOS, setAgreeTOS] = useState(false);
+  
   // 關鍵修復：補回這兩個狀態
   const [showExamples, setShowExamples] = useState(false); 
   const [reqType, setReqType] = useState('avatar'); 
@@ -696,65 +717,69 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
       {isSettingsOpen && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-white"><h2 className="text-xl font-black mb-6 flex items-center gap-2"><Lock size={20}/> 修改帳戶密碼</h2><form onSubmit={handleChangePassword} className="space-y-2"><InputBox label="目前舊密碼"><input name="oldPwd" type="password" required style={inputBaseStyle} /></InputBox><InputBox label="設定新密碼"><input name="newPwd" type="password" required style={inputBaseStyle} /></InputBox><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setSettingsOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">取消</button><button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg">確認修改</button></div></form></div></div>)}
       
       {/* 委託申請表單 (修復：現在可以正常使用了) */}
-      {isNewReqOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[1.5rem] w-[95%] md:w-full max-w-md p-6 md:p-8 shadow-2xl border border-white my-4"><div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-xl md:text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2><button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button></div><form onSubmit={handleNewRequest} className="space-y-2"><InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox><InputBox label="委託類別"><select name="type" style={inputBaseStyle} className="cursor-pointer" onChange={(e)=>{ setReqType(e.target.value); setNewRequestImgs([]); }}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select><button type="button" onClick={()=>setShowExamples(!showExamples)} className="text-[10px] text-blue-500 font-bold mt-2 flex items-center gap-1 hover:text-blue-600"><ImageIcon size={12}/> {showExamples ? '隱藏範例' : '查看範例圖'}</button>{showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{EXAMPLE_IMAGES[reqType]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}</InputBox><InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setNewRequestImgs(prev=>({...prev, paymentType: 'paid'}))} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all bg-white text-emerald-600 shadow-sm`}>💰 付費</button><button type="button" className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all text-slate-400`}>無償 (需選擇)</button></div><div className="flex gap-2 mt-1"><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="paid" defaultChecked className="accent-blue-600"/> <span className="text-xs font-bold text-slate-600">付費委託</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="free" className="accent-pink-500"/> <span className="text-xs font-bold text-slate-600">無償/贈圖</span></label></div></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${newRequestImgs.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${newRequestImgs.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={newRequestImgs.length >= 5 || isProcessing} /></label>{newRequestImgs.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{newRequestImgs.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '80px', resize: 'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
+      {isNewReqOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"><div className="bg-white rounded-[1.5rem] w-[95%] md:w-full max-w-md p-6 md:p-8 shadow-2xl border border-white my-4"><div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-xl md:text-2xl font-black flex items-center gap-3"><Mail className="text-pink-500"/> 發起新委託</h2><button onClick={()=>setNewReqOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X size={20}/></button></div><form onSubmit={handleNewRequest} className="space-y-2"><InputBox label="聯絡方式"><input name="contact" required style={inputBaseStyle} placeholder="Discord ID / Email" /></InputBox><InputBox label="委託類別"><select name="type" style={inputBaseStyle} className="cursor-pointer" onChange={(e)=>{ setReqType(e.target.value); setNewRequestImgs([]); }}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select><button type="button" onClick={()=>setShowExamples(!showExamples)} className="text-[10px] text-blue-500 font-bold mt-2 flex items-center gap-1 hover:text-blue-600"><ImageIcon size={12}/> {showExamples ? '隱藏範例' : '查看範例圖'}</button>{showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{exampleImages[reqType]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}</InputBox><InputBox label="委託性質 (必選)"><div className="flex bg-slate-100 p-1 rounded-lg"><button type="button" onClick={()=>setNewRequestImgs(prev=>({...prev, paymentType: 'paid'}))} className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all bg-white text-emerald-600 shadow-sm`}>💰 付費</button><button type="button" className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all text-slate-400`}>無償 (需選擇)</button></div><div className="flex gap-2 mt-1"><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="paid" defaultChecked className="accent-blue-600"/> <span className="text-xs font-bold text-slate-600">付費委託</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="paymentType" value="free" className="accent-pink-500"/> <span className="text-xs font-bold text-slate-600">無償/贈圖</span></label></div></InputBox><InputBox label={`參考圖片 (選填, 最多5張) ${newRequestImgs.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${newRequestImgs.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={newRequestImgs.length >= 5 || isProcessing} /></label>{newRequestImgs.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{newRequestImgs.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '80px', resize: 'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
       <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4"><p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{tos || "請遵守委託相關規定。"}</p><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="accent-blue-600" checked={agreeTOS} onChange={e=>setAgreeTOS(e.target.checked)} /><span className="text-xs font-bold text-slate-700">我已閱讀並同意服務條款</span></label></div><button type="submit" className={`w-full py-4 bg-pink-500 text-white font-black rounded-xl shadow-xl hover:bg-pink-600 mt-4 ${!agreeTOS && 'opacity-50 cursor-not-allowed'}`} disabled={isProcessing || !agreeTOS}>送出請求</button></form></div></div>)}
     </div>
   );
 };
 
-// --- 3. 繪師後台 (新增匯款資訊設定 & 查看證明) ---
+// --- 3. 繪師後台 (新增匯款資訊設定 & 查看證明 & 管理範例圖) ---
 const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify, onLogout }) => {
   // ... (State logic same as before) ...
   const [activeMainTab, setActiveMainTab] = useState('commissions'); const [subTab, setSubTab] = useState('all'); const [searchQuery, setSearchQuery] = useState(''); const [editItem, setEditItem] = useState(null); const [selectedUserDetail, setSelectedUserDetail] = useState(null); const [isSettingsOpen, setSettingsOpen] = useState(false); const [previewImage, setPreviewImage] = useState(null);
   
-  // 新增：後台的排序與狀態過濾
-  const [sortOrder, setSortOrder] = useState('date_desc'); 
-  const [statusFilter, setStatusFilter] = useState('all'); // all, pending, ongoing, done (用於委託類 tab)
-
-  const filteredAll = useMemo(() => { 
-      let result = commissions.filter(c => 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-
-      // 排序
-      result.sort((a, b) => {
-        if (sortOrder === 'date_desc') return new Date(b.updatedAt) - new Date(a.updatedAt);
-        if (sortOrder === 'date_asc') return new Date(a.updatedAt) - new Date(b.updatedAt);
-        if (sortOrder === 'name_asc') return a.name.localeCompare(b.name);
-        if (sortOrder === 'name_desc') return b.name.localeCompare(a.name);
-        return 0;
-      });
-
-      return result;
-  }, [commissions, searchQuery, sortOrder]);
-
-  const requestsList = filteredAll.filter(c => c.status === 'pending');
-  // 修改：委託類現在包含 done，並支援 statusFilter
-  const commissionsList = filteredAll.filter(c => c.status !== 'pending');
+  // 新增：範例圖編輯狀態
+  const [editExampleType, setEditExampleType] = useState('avatar');
+  const [editExampleLinks, setEditExampleLinks] = useState('');
   
-  const getDisplayList = () => {
-      let list = activeMainTab === 'commissions' ? commissionsList : requestsList;
-      
-      // 狀態二次過濾 (僅在委託類 tab 有效)
-      if (activeMainTab === 'commissions' && statusFilter !== 'all') {
-          if (statusFilter === 'ongoing') list = list.filter(c => c.status === 'waiting' || c.status === 'working');
-          else list = list.filter(c => c.status === statusFilter);
+  // 圖片上傳狀態
+  const [isUploadingExample, setIsUploadingExample] = useState(false);
+  const [editExampleImages, setEditExampleImages] = useState([]);
+
+  // 初始化編輯範例圖
+  useEffect(() => {
+      if (artistSettings.exampleImages) {
+          setEditExampleImages(artistSettings.exampleImages[editExampleType] || []);
+      } else {
+          setEditExampleImages([]);
       }
+  }, [editExampleType, artistSettings]);
 
-      // 類型過濾
-      if (subTab !== 'all') list = list.filter(c => c.type === subTab);
-      
-      return list;
-  };
-
-  const toggleSort = () => {
-    const nextSort = { 'date_desc': 'date_asc', 'date_asc': 'name_asc', 'name_asc': 'name_desc', 'name_desc': 'date_desc' };
-    setSortOrder(nextSort[sortOrder]);
-  };
-
+  const filteredAll = useMemo(() => { return commissions.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.code.toLowerCase().includes(searchQuery.toLowerCase()) || (c.userName && c.userName.toLowerCase().includes(searchQuery.toLowerCase()))); }, [commissions, searchQuery]);
+  const requestsList = filteredAll.filter(c => c.status === 'pending'); const ongoingList = filteredAll.filter(c => c.status !== 'pending' && c.status !== 'done'); const getSubFiltered = (list) => subTab === 'all' ? list : list.filter(c => c.type === subTab);
   const handleUpdateSettings = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const { oldPwd, newPwd, paymentInfo, tos, isOpen } = Object.fromEntries(fd); if (oldPwd && oldPwd !== artistSettings.password) { notify('舊密碼錯誤', 'error'); return; } const updateData = { paymentInfo, tos, isOpen: isOpen === 'on' }; if(newPwd) updateData.password = newPwd; try { await updateDoc(doc(db, "settings", "admin_config"), updateData); notify('設定更新成功！'); setSettingsOpen(false); } catch(e) { notify('更新失敗', 'error'); } };
+  
+  // 新增：範例圖上傳
+  const handleExampleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setIsUploadingExample(true);
+    const newImages = [];
+    for (const file of files) {
+        try { 
+            const result = await smartUpload(file);
+            newImages.push(result); 
+        } catch (error) { alert("圖片上傳失敗"); }
+    }
+    setEditExampleImages(prev => [...prev, ...newImages]);
+    setIsUploadingExample(false);
+    e.target.value = null; 
+  };
+
+  const removeExampleImage = (index) => {
+      setEditExampleImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 新增：儲存範例圖
+  const handleSaveExamples = async () => {
+      // 確保 exampleImages 是一個物件，避免 undefined
+      const currentExamples = artistSettings.exampleImages || {};
+      const newExamples = { ...currentExamples, [editExampleType]: editExampleImages };
+      try {
+          await updateDoc(doc(db, "settings", "admin_config"), { exampleImages: newExamples });
+          notify('範例圖更新成功！');
+      } catch (e) { notify('更新失敗', 'error'); }
+  };
 
   // 匯出 CSV 功能
   const handleExportCSV = () => {
@@ -781,9 +806,6 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             {activeMainTab === 'messages' ? (<Messenger commissions={commissions} currentUser={{ name: '繪師', role: 'artist' }} />) : (<>
                 {activeMainTab !== 'accounts' && (
                     <div className="space-y-4 mb-8">
-                        {/* 繪師戰情室統計 */}
-                        <ArtistStats commissions={commissions} />
-                        
                          {/* 排序按鈕 */}
                          <div className="flex justify-end">
                             <button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">
@@ -829,7 +851,7 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
             </>)}
         </main>
       </div>
-      {/* 繪師設定彈窗 */}
+      {/* 繪師設定彈窗 (含範例圖管理) */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl border border-white max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -842,6 +864,33 @@ const ArtistDashboard = ({ commissions, registeredUsers, artistSettings, notify,
                             <input type="checkbox" name="isOpen" className="sr-only peer" defaultChecked={artistSettings.isOpen} />
                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
+                    </div>
+                    
+                    {/* 範例圖管理區塊 */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <span className="font-bold text-sm text-slate-700 block mb-2">作品範例圖管理</span>
+                        <select className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold mb-4" value={editExampleType} onChange={e=>setEditExampleType(e.target.value)}>
+                            <option value="avatar">大頭貼</option>
+                            <option value="halfBody">半身插畫</option>
+                            <option value="fullBody">全身立繪</option>
+                            <option value="other">其他</option>
+                        </select>
+                        
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                            {editExampleImages.map((src, idx) => (
+                                <div key={idx} className="relative group aspect-square">
+                                    <img src={src} alt="example" className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                                    <button type="button" onClick={() => removeExampleImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm"><X size={12}/></button>
+                                </div>
+                            ))}
+                            <label className={`flex flex-col items-center justify-center bg-white border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors aspect-square ${isUploadingExample ? 'opacity-50' : ''}`}>
+                                {isUploadingExample ? <Loader2 size={20} className="animate-spin text-slate-400"/> : <Plus size={24} className="text-slate-400"/>}
+                                <span className="text-[10px] text-slate-400 font-bold mt-1">新增</span>
+                                <input type="file" accept="image/*" multiple className="hidden" onChange={handleExampleImageUpload} disabled={isUploadingExample}/>
+                            </label>
+                        </div>
+                        
+                        <button type="button" onClick={handleSaveExamples} className="w-full py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">儲存此分類範例</button>
                     </div>
 
                     <InputBox label="服務條款 (TOS)"><textarea name="tos" style={{...inputBaseStyle, height:'80px', resize:'none'}} defaultValue={artistSettings.tos} placeholder="請輸入委託須知..."/></InputBox>
