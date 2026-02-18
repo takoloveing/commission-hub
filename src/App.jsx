@@ -10,7 +10,7 @@ import {
   BarChart3, Copy, Eye, Power
 } from 'lucide-react';
 
-// --- 改回標準 NPM 引用 (解決 Dynamic require 錯誤) ---
+// --- Firebase 標準引入 ---
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, 
@@ -139,7 +139,7 @@ const getStatusLabel = (status) => {
         case 'working': return '進行中';
         case 'done': return '已完成';
         case 'declined': return '已婉拒';
-        default: return status;
+        default: return status || '未知';
     }
 };
 
@@ -330,6 +330,7 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos, exampleI
         <div className="text-center mb-6"><div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-xl rotate-2"><Palette size={28}/></div><h1 className="text-xl md:text-2xl font-black">Commission<span className="text-blue-500">Hub</span></h1><div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isCommissionOpen ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'}`}><div className={`w-2 h-2 rounded-full ${isCommissionOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>{isCommissionOpen ? 'OPEN / 接單中' : 'CLOSED / 暫停接單'}</div></div>
         <div className="flex p-1 bg-slate-100 rounded-xl mb-6 overflow-x-auto no-scrollbar gap-1">{['login', 'register', 'anonymous_track', 'anonymous_req', 'forgot_password', 'artist'].map(tab => (<button key={tab} onClick={()=>{setActiveTab(tab); setFormData({name:'', password:'', code:'', contact:'', type:'avatar', desc:'', referenceImages: [], paymentType: 'paid'})}} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap px-3 ${activeTab===tab?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{tab === 'login' ? '登入' : tab === 'register' ? '註冊' : tab === 'anonymous_track' ? '匿名查詢' : tab === 'anonymous_req' ? '匿名委託' : tab === 'forgot_password' ? '忘記密碼' : '繪師端'}</button>))}</div>
         
+        {/* 如果暫停接單且選中匿名委託，顯示警告 */}
         {!isCommissionOpen && activeTab === 'anonymous_req' ? (
             <div className="text-center p-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                 <Ban size={48} className="mx-auto text-slate-300 mb-4" />
@@ -350,17 +351,8 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos, exampleI
                       {showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{exampleImages && exampleImages[formData.type] ? exampleImages[formData.type].map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />)) : <p className="text-xs text-slate-400">尚無範例</p>}</div>)}
                     </InputBox>
                     <InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '60px', resize: 'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
-                    
-                    {/* TOS 勾選 */}
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
-                        <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{tos || "請遵守委託相關規定。"}</p>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" className="accent-blue-600" checked={agreeTOS} onChange={e=>setAgreeTOS(e.target.checked)} />
-                            <span className="text-xs font-bold text-slate-700">我已閱讀並同意服務條款</span>
-                        </label>
-                    </div>
-
-                    </div>)}
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4"><p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{tos || "請遵守委託相關規定。"}</p><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="accent-blue-600" checked={agreeTOS} onChange={e=>setAgreeTOS(e.target.checked)} /><span className="text-xs font-bold text-slate-700">我已閱讀並同意服務條款</span></label></div>
+                </div>)}
                 {activeTab === 'artist' && (<InputBox label="繪師管理密碼"><input required type="password" style={inputBaseStyle} placeholder="管理專用" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></InputBox>)}
                 <button type="submit" className={`w-full py-3 md:py-4 text-white font-black rounded-xl md:rounded-2xl shadow-xl transition-all active:scale-95 text-base md:text-lg mt-4 relative z-20 ${activeTab==='register'?'bg-pink-500 shadow-pink-100':activeTab==='anonymous_req'?'bg-emerald-500 shadow-emerald-100':activeTab==='forgot_password'?'bg-orange-500 shadow-orange-100':'bg-blue-600 shadow-blue-100'} ${(activeTab==='anonymous_req' && !agreeTOS) ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isProcessing || (activeTab==='anonymous_req' && !agreeTOS)}>{activeTab === 'login' ? '登入帳號' : activeTab === 'register' ? '建立帳號' : activeTab === 'anonymous_track' ? '匿名查詢' : activeTab === 'anonymous_req' ? '送出請求' : activeTab === 'forgot_password' ? '驗證並重設' : '進入後台'}</button>
             </form>
@@ -398,8 +390,8 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
   // 篩選與排序邏輯
   const filteredCommissions = useMemo(() => {
     let result = myCommissions.filter(c => {
-      const searchMatch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          c.code.toLowerCase().includes(searchQuery.toLowerCase());
+      const searchMatch = (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (c.code || '').toLowerCase().includes(searchQuery.toLowerCase());
       if (!searchMatch) return false;
 
       let statusMatch = true;
@@ -445,7 +437,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
               )}
             </div>
 
-            {/* 篩選器區域 (省略以節省長度) */}
+            {/* 篩選器區域 */}
             <div className="mb-6 space-y-3"><div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-3 top-2.5 text-slate-400" size={16}/><input placeholder="搜尋名稱或編號..." className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm outline-none focus:border-blue-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div><button onClick={toggleSort} className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-1 text-xs font-bold">{sortOrder.includes('date') ? <Calendar size={16}/> : <Type size={16}/>}{sortOrder.includes('asc') ? <ArrowLeft className="rotate-90" size={12}/> : <ArrowLeft className="-rotate-90" size={12}/>}</button></div><div className="flex p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar gap-1">{['all', 'pending', 'ongoing', 'done', 'declined'].map(status => (<button key={status} onClick={() => setStatusFilter(status)} className={`flex-1 py-2 px-3 rounded-lg text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${statusFilter===status ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>{status === 'all' ? '全部' : status === 'pending' ? '未確認' : status === 'ongoing' ? '進行中' : status === 'done' ? '已完成' : '已婉拒'}</button>))}</div><div className="flex gap-2 overflow-x-auto no-scrollbar">{['all', 'avatar', 'halfBody', 'fullBody', 'other'].map(type => (<button key={type} onClick={() => setTypeFilter(type)} className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border transition-all whitespace-nowrap ${typeFilter===type ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}>{type === 'all' ? '所有類型' : type === 'avatar' ? '大頭' : type === 'halfBody' ? '半身' : type === 'fullBody' ? '全身' : '其他'}</button>))}</div></div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 pb-20">{filteredCommissions.map(c => (<div key={c.id} onClick={()=>setSelectedProject(c)} className={`bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 ${c.status==='declined'?'border-slate-200 bg-slate-50 opacity-80':'border-slate-100'} hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group`}><div className="flex justify-between items-start mb-4 md:mb-6"><h3 className="font-black text-lg md:text-xl capitalize">{c.type}</h3><div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${getStatusStyle(c.status)}`}>{getStatusLabel(c.status)}</div></div><div className="flex justify-between items-center"><div className="text-[10px] font-black text-slate-300 uppercase">#{c.code}</div>{c.paymentType === 'free' && <span className="bg-pink-100 text-pink-500 text-[9px] px-2 py-0.5 rounded font-black">無償</span>}</div><div className="mt-3 flex justify-between items-center text-xs font-bold text-slate-400"><span>{c.updatedAt.split('T')[0]}</span><ChevronRight size={16}/></div></div>))}{filteredCommissions.length === 0 && (<div className="col-span-full text-center p-10 text-slate-400 text-xs font-bold border-2 border-dashed border-slate-200 rounded-2xl">沒有符合條件的委託</div>)}</div>
@@ -453,7 +445,7 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
         ) : (<Messenger commissions={myCommissions} currentUser={user} />)}
       </main>
       
-      {/* 委託詳情與設定彈窗 (省略) */}
+      {/* 委託詳情彈窗 */}
       {selectedProject && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-hidden">
             <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] w-[95%] md:w-full max-w-xl p-5 md:p-10 shadow-2xl relative border border-white my-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
