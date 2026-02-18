@@ -43,8 +43,8 @@ try {
   console.error("Firebase Init Error:", error);
 }
 
-// --- 範例圖設定 (預設值) ---
-const DEFAULT_EXAMPLE_IMAGES = {
+// --- 範例圖預設值 (修正變數名稱) ---
+const EXAMPLE_IMAGES = {
   avatar: ["https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400","https://images.unsplash.com/photo-1554151228-14d9def656ec?w=400"],
   halfBody: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400","https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"],
   fullBody: ["https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400","https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400"],
@@ -361,7 +361,7 @@ const App = () => {
       paymentInfo: '', 
       tos: '尚無服務條款', 
       isOpen: true,
-      exampleImages: DEFAULT_EXAMPLE_IMAGES // 預設值
+      exampleImages: EXAMPLE_IMAGES // 使用修正後的變數名稱
   }); 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -378,10 +378,9 @@ const App = () => {
     const unsubSettings = onSnapshot(doc(db, "settings", "admin_config"), (docSnap) => {
       if (docSnap.exists()) {
           const data = docSnap.data();
-          // 合併資料，確保 exampleImages 有值
           setArtistSettings({
               ...data,
-              exampleImages: data.exampleImages || DEFAULT_EXAMPLE_IMAGES
+              exampleImages: data.exampleImages || EXAMPLE_IMAGES
           });
       } else {
           setDoc(doc(db, "settings", "admin_config"), { 
@@ -389,7 +388,7 @@ const App = () => {
               paymentInfo: '', 
               tos: '', 
               isOpen: true,
-              exampleImages: DEFAULT_EXAMPLE_IMAGES
+              exampleImages: EXAMPLE_IMAGES
           });
       }
     });
@@ -578,7 +577,7 @@ const LoginView = ({ onAuth, onAnonymousRequest, isCommissionOpen, tos, exampleI
                     <InputBox label="委託類別">
                       <select style={inputBaseStyle} value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}><option value="avatar">大頭貼</option><option value="halfBody">半身插畫</option><option value="fullBody">全身立繪</option><option value="other">其他</option></select>
                       <button type="button" onClick={()=>setShowExamples(!showExamples)} className="text-[10px] text-blue-500 font-bold mt-2 flex items-center gap-1 hover:text-blue-600"><ImageIcon size={12}/> {showExamples ? '隱藏範例' : '查看範例圖'}</button>
-                      {showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{exampleImages[formData.type]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}
+                      {showExamples && (<div className="grid grid-cols-3 gap-2 mt-2">{EXAMPLE_IMAGES[formData.type]?.map((src, i) => (<img key={i} src={src} className="w-full h-20 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90" onClick={()=>setPreviewImage(src)} />))}</div>)}
                     </InputBox>
                     <InputBox label={`參考圖片 (選填, 最多5張) ${formData.referenceImages.length}/5`}><div className="mt-1"><label className={`flex items-center justify-center gap-2 p-3 bg-slate-100 rounded-xl cursor-pointer hover:bg-slate-200 transition-colors border-2 border-dashed border-slate-300 ${formData.referenceImages.length >= 5 || isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>{isProcessing ? <Loader2 size={16} className="animate-spin text-slate-500" /> : <ImageIcon size={16} className="text-slate-500" />}<span className="text-xs font-bold text-slate-500">{isProcessing ? '處理中...' : '點擊上傳'}</span><input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} disabled={formData.referenceImages.length >= 5 || isProcessing} /></label>{formData.referenceImages.length > 0 && (<div className="grid grid-cols-4 gap-2 mt-3">{formData.referenceImages.map((img, idx) => (<div key={idx} className="relative group aspect-square"><img src={img} alt="ref" className="w-full h-full rounded-lg object-cover border border-slate-200" /><button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"><X size={10} /></button></div>))}</div>)}</div></InputBox><InputBox label="需求描述"><textarea name="desc" placeholder="請描述您的角色或需求..." style={{...inputBaseStyle, height: '60px', resize: 'none'}} value={formData.desc} onChange={e=>setFormData({...formData, desc: e.target.value})} /></InputBox>
                     
@@ -611,7 +610,6 @@ const ClientDashboard = ({ user, allCommissions, artistPaymentInfo, isCommission
   const [previewImage, setPreviewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [agreeTOS, setAgreeTOS] = useState(false);
-  
   // 關鍵修復：補回這兩個狀態
   const [showExamples, setShowExamples] = useState(false); 
   const [reqType, setReqType] = useState('avatar'); 
